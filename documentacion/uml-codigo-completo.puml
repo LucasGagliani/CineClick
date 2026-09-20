@@ -1,0 +1,757 @@
+@startuml CineClick_Codigo_Completo
+title CineClick Backend - UML exacto del proyecto actual
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+left to right direction
+
+package "com.cineclick.model" as model {
+
+  class Usuario <<Entity>> {
+    - Long id
+    - String nombre
+    - String apellido
+    - String email
+    - String password
+    - RolUsuario rol
+    - boolean activo = true
+    + nombreCompleto(): String
+    + desactivar(): void
+  }
+
+  class Cliente <<Entity>> {
+    - Long id
+    - String telefono
+    - LocalDateTime fechaRegistro
+    - Usuario usuario
+    + prePersist(): void
+    + nombreCompleto(): String
+    + desactivar(): void
+  }
+
+  class Pelicula <<Entity>> {
+    - Long id
+    - String titulo
+    - String sinopsis
+    - Integer duracionMinutos
+    - String clasificacion
+    - Genero genero
+    - String idioma
+    - Set<FormatoFuncion> formatosDisponibles
+    - String urlPoster
+    - LocalDate fechaEstreno
+    - boolean activa = true
+    + estaDisponible(): boolean
+    + validarDuracion(): void
+  }
+
+  class Cine <<Entity>> {
+    - Long id
+    - String nombre
+    - String direccion
+    - String ciudad
+    - String telefono
+    - boolean activo = true
+    - List<Sala> salas
+    + agregarSala(sala: Sala): void
+    + obtenerSalasActivas(): List<Sala>
+  }
+
+  class Sala <<Entity>> {
+    - Long id
+    - String nombre
+    - Integer numero
+    - TipoSala tipo
+    - boolean activa = true
+    - Cine cine
+    - List<Butaca> butacas
+    + capacidad(): Integer
+    + agregarButaca(butaca: Butaca): void
+  }
+
+  class Butaca <<Entity>> {
+    - Long id
+    - String fila
+    - Integer numero
+    - TipoButaca tipo = NORMAL
+    - boolean activa = true
+    - Sala sala
+    + codigo(): String
+    + estaHabilitada(): boolean
+  }
+
+  class Funcion <<Entity>> {
+    - Long id
+    - LocalDateTime fechaHoraInicio
+    - LocalDateTime fechaHoraFin
+    - BigDecimal precioBase
+    - FormatoFuncion formato
+    - String idioma
+    - EstadoFuncion estado = PROGRAMADA
+    - Pelicula pelicula
+    - Sala sala
+    + calcularHorarioFin(): void
+    + estaDisponibleParaVenta(): boolean
+    + cambiarEstado(estado: EstadoFuncion): void
+  }
+
+  class Compra <<Entity>> {
+    - Long id
+    - LocalDateTime fechaCompra
+    - BigDecimal total = ZERO
+    - EstadoCompra estado = PENDIENTE_PAGO
+    - Cliente cliente
+    - Funcion funcion
+    - List<Entrada> entradas
+    - Promocion promocion
+    - Pago pago
+    + prePersist(): void
+    + agregarEntrada(entrada: Entrada): void
+    + calcularTotal(): BigDecimal
+    + confirmar(): void
+    + cancelar(): void
+  }
+
+  class Entrada <<Entity>> {
+    - Long id
+    - String codigoQr
+    - BigDecimal precioUnitario
+    - EstadoEntrada estado = EMITIDA
+    - Compra compra
+    - Funcion funcion
+    - Butaca butaca
+    + generarCodigoQr(): void
+    + marcarUsada(): void
+    + cancelar(): void
+  }
+
+  class Pago <<Entity>> {
+    - Long id
+    - BigDecimal monto
+    - MetodoPago metodoPago
+    - EstadoPago estado = PENDIENTE
+    - LocalDateTime fechaPago
+    - String codigoTransaccion
+    - Compra compra
+    + confirmar(codigoTransaccion: String): void
+    + rechazar(): void
+  }
+
+  class Promocion <<Entity>> {
+    - Long id
+    - String codigo
+    - String descripcion
+    - BigDecimal porcentajeDescuento
+    - LocalDate fechaInicio
+    - LocalDate fechaFin
+    - boolean activa = true
+    + estaVigente(fecha: LocalDate): boolean
+    + calcularDescuento(total: BigDecimal): BigDecimal
+  }
+
+  enum Genero {
+    ACCION
+    COMEDIA
+    DRAMA
+    TERROR
+    CIENCIA_FICCION
+    ANIMACION
+    DOCUMENTAL
+  }
+
+  enum FormatoFuncion {
+    DOS_D
+    TRES_D
+    IMAX
+    CUATRO_D
+  }
+
+  enum TipoSala {
+    TRADICIONAL
+    PREMIUM
+    IMAX
+    CUATRO_D
+  }
+
+  enum TipoButaca {
+    NORMAL
+    VIP
+    DISCAPACIDAD
+  }
+
+  enum EstadoFuncion {
+    PROGRAMADA
+    AGOTADA
+    CANCELADA
+    FINALIZADA
+  }
+
+  enum EstadoCompra {
+    PENDIENTE_PAGO
+    CONFIRMADA
+    CANCELADA
+  }
+
+  enum EstadoEntrada {
+    EMITIDA
+    USADA
+    CANCELADA
+  }
+
+  enum MetodoPago {
+    TARJETA_CREDITO
+    TARJETA_DEBITO
+    MERCADO_PAGO
+    EFECTIVO
+  }
+
+  enum EstadoPago {
+    PENDIENTE
+    APROBADO
+    RECHAZADO
+  }
+
+  enum RolUsuario {
+    ADMIN
+    CLIENTE
+  }
+}
+
+package "com.cineclick.dto" as dto {
+  class ButacaResponseDTO <<DTO record>> {
+    + Long id
+    + String fila
+    + Integer numero
+    + String codigo
+    + TipoButaca tipo
+    + boolean disponible
+  }
+
+  class CineRequestDTO <<DTO record>> {
+    + String nombre
+    + String direccion
+    + String ciudad
+    + String telefono
+  }
+
+  class CineResponseDTO <<DTO record>> {
+    + Long id
+    + String nombre
+    + String direccion
+    + String ciudad
+    + String telefono
+    + boolean activo
+    + List<SalaResponseDTO> salas
+  }
+
+  class ClienteRequestDTO <<DTO record>> {
+    + String nombre
+    + String apellido
+    + String email
+    + String password
+    + String telefono
+  }
+
+  class ClienteResponseDTO <<DTO record>> {
+    + Long id
+    + Long usuarioId
+    + String nombre
+    + String apellido
+    + String email
+    + String telefono
+    + LocalDateTime fechaRegistro
+    + boolean activo
+  }
+
+  class CompraRequestDTO <<DTO record>> {
+    + Long clienteId
+    + Long funcionId
+    + List<Long> butacasIds
+    + String codigoPromocion
+  }
+
+  class CompraResponseDTO <<DTO record>> {
+    + Long id
+    + Long clienteId
+    + String clienteNombre
+    + Long funcionId
+    + String peliculaTitulo
+    + LocalDateTime fechaCompra
+    + BigDecimal total
+    + EstadoCompra estado
+    + List<EntradaResponseDTO> entradas
+    + PagoResponseDTO pago
+  }
+
+  class EntradaResponseDTO <<DTO record>> {
+    + Long id
+    + String codigoQr
+    + String fila
+    + Integer numeroButaca
+    + String codigoButaca
+    + BigDecimal precioUnitario
+    + EstadoEntrada estado
+  }
+
+  class ErrorResponseDTO <<DTO record>> {
+    + LocalDateTime timestamp
+    + int status
+    + String error
+    + String mensaje
+    + String path
+    + List<String> detalles
+  }
+
+  class FuncionRequestDTO <<DTO record>> {
+    + Long peliculaId
+    + Long salaId
+    + LocalDateTime fechaHoraInicio
+    + BigDecimal precioBase
+    + FormatoFuncion formato
+    + String idioma
+  }
+
+  class FuncionResponseDTO <<DTO record>> {
+    + Long id
+    + Long peliculaId
+    + String peliculaTitulo
+    + Long cineId
+    + String cineNombre
+    + Long salaId
+    + String salaNombre
+    + LocalDateTime fechaHoraInicio
+    + LocalDateTime fechaHoraFin
+    + BigDecimal precioBase
+    + FormatoFuncion formato
+    + String idioma
+    + EstadoFuncion estado
+  }
+
+  class LoginRequestDTO <<DTO record>> {
+    + String email
+    + String password
+  }
+
+  class LoginResponseDTO <<DTO record>> {
+    + Long usuarioId
+    + String nombreCompleto
+    + String email
+    + RolUsuario rol
+    + String mensaje
+  }
+
+  class PagoRequestDTO <<DTO record>> {
+    + MetodoPago metodoPago
+    + String datosPagoToken
+  }
+
+  class PagoResponseDTO <<DTO record>> {
+    + Long id
+    + BigDecimal monto
+    + MetodoPago metodoPago
+    + EstadoPago estado
+    + LocalDateTime fechaPago
+    + String codigoTransaccion
+  }
+
+  class PeliculaRequestDTO <<DTO record>> {
+    + String titulo
+    + String sinopsis
+    + Integer duracionMinutos
+    + String clasificacion
+    + Genero genero
+    + String idioma
+    + Set<FormatoFuncion> formatosDisponibles
+    + String urlPoster
+    + LocalDate fechaEstreno
+  }
+
+  class PeliculaResponseDTO <<DTO record>> {
+    + Long id
+    + String titulo
+    + String sinopsis
+    + Integer duracionMinutos
+    + String clasificacion
+    + Genero genero
+    + String idioma
+    + Set<FormatoFuncion> formatosDisponibles
+    + String urlPoster
+    + LocalDate fechaEstreno
+    + boolean activa
+  }
+
+  class PromocionRequestDTO <<DTO record>> {
+    + String codigo
+    + String descripcion
+    + BigDecimal porcentajeDescuento
+    + LocalDate fechaInicio
+    + LocalDate fechaFin
+    + boolean activa
+  }
+
+  class PromocionResponseDTO <<DTO record>> {
+    + Long id
+    + String codigo
+    + String descripcion
+    + BigDecimal porcentajeDescuento
+    + LocalDate fechaInicio
+    + LocalDate fechaFin
+    + boolean activa
+  }
+
+  class SalaRequestDTO <<DTO record>> {
+    + String nombre
+    + Integer numero
+    + TipoSala tipo
+    + Integer cantidadFilas
+    + Integer butacasPorFila
+  }
+
+  class SalaResponseDTO <<DTO record>> {
+    + Long id
+    + String nombre
+    + Integer numero
+    + TipoSala tipo
+    + boolean activa
+    + Integer capacidad
+  }
+
+  class DtoMapper <<Mapper>> {
+    + toPeliculaResponse(pelicula: Pelicula): PeliculaResponseDTO
+    + toCineResponse(cine: Cine): CineResponseDTO
+    + toSalaResponse(sala: Sala): SalaResponseDTO
+    + toButacaResponse(butaca: Butaca, disponible: boolean): ButacaResponseDTO
+    + toFuncionResponse(funcion: Funcion): FuncionResponseDTO
+    + toClienteResponse(cliente: Cliente): ClienteResponseDTO
+    + toCompraResponse(compra: Compra): CompraResponseDTO
+    + toEntradaResponse(entrada: Entrada): EntradaResponseDTO
+    + toPagoResponse(pago: Pago): PagoResponseDTO
+    + toPromocionResponse(promocion: Promocion): PromocionResponseDTO
+  }
+}
+
+package "com.cineclick.repository" as repo {
+  interface UsuarioRepository <<Repository>> {
+    + findByEmailIgnoreCase(email: String): Optional<Usuario>
+    + existsByEmailIgnoreCase(email: String): boolean
+  }
+
+  interface ClienteRepository <<Repository>> {
+    + findByUsuarioEmailIgnoreCase(email: String): Optional<Cliente>
+  }
+
+  interface PeliculaRepository <<Repository>> {
+    + findByActivaTrue(): List<Pelicula>
+    + findByGeneroAndActivaTrue(genero: Genero): List<Pelicula>
+  }
+
+  interface CineRepository <<Repository>> {
+    + findByActivoTrue(): List<Cine>
+    + findByCiudadIgnoreCaseAndActivoTrue(ciudad: String): List<Cine>
+  }
+
+  interface SalaRepository <<Repository>> {
+    + findByCineIdAndActivaTrue(cineId: Long): List<Sala>
+  }
+
+  interface ButacaRepository <<Repository>> {
+    + findBySalaIdAndActivaTrue(salaId: Long): List<Butaca>
+  }
+
+  interface FuncionRepository <<Repository>> {
+    + findByPeliculaId(peliculaId: Long): List<Funcion>
+    + findBySalaId(salaId: Long): List<Funcion>
+    + findByFechaHoraInicioBetween(desde: LocalDateTime, hasta: LocalDateTime): List<Funcion>
+  }
+
+  interface CompraRepository <<Repository>> {
+    + findByClienteId(clienteId: Long): List<Compra>
+  }
+
+  interface EntradaRepository <<Repository>> {
+    + findByFuncionId(funcionId: Long): List<Entrada>
+    + findByCompraId(compraId: Long): List<Entrada>
+    + existsByFuncionIdAndButacaIdAndEstadoNot(funcionId: Long, butacaId: Long, estado: EstadoEntrada): boolean
+  }
+
+  interface PagoRepository <<Repository>> {
+    + findByCompraId(compraId: Long): Optional<Pago>
+  }
+
+  interface PromocionRepository <<Repository>> {
+    + findByCodigoIgnoreCase(codigo: String): Optional<Promocion>
+    + findByActivaTrue(): List<Promocion>
+  }
+}
+
+package "com.cineclick.service" as service {
+  class AuthService <<Service>> {
+    - UsuarioRepository usuarioRepository
+    + login(dto: LoginRequestDTO): LoginResponseDTO
+  }
+
+  class ClienteService <<Service>> {
+    - ClienteRepository clienteRepository
+    - UsuarioRepository usuarioRepository
+    + listar(): List<ClienteResponseDTO>
+    + registrar(dto: ClienteRequestDTO): ClienteResponseDTO
+    + buscarPorId(id: Long): ClienteResponseDTO
+    + actualizar(id: Long, dto: ClienteRequestDTO): ClienteResponseDTO
+    + eliminar(id: Long): void
+    + buscarEntidad(id: Long): Cliente
+    + validarEmailUnico(email: String): void
+  }
+
+  class PeliculaService <<Service>> {
+    - PeliculaRepository peliculaRepository
+    + listar(genero: Genero): List<PeliculaResponseDTO>
+    + buscarPorId(id: Long): PeliculaResponseDTO
+    + crear(dto: PeliculaRequestDTO): PeliculaResponseDTO
+    + actualizar(id: Long, dto: PeliculaRequestDTO): PeliculaResponseDTO
+    + eliminar(id: Long): void
+    + buscarEntidad(id: Long): Pelicula
+    + validarDatos(pelicula: Pelicula): void
+  }
+
+  class CineService <<Service>> {
+    - CineRepository cineRepository
+    - SalaRepository salaRepository
+    + listar(ciudad: String): List<CineResponseDTO>
+    + buscarPorId(id: Long): CineResponseDTO
+    + crear(dto: CineRequestDTO): CineResponseDTO
+    + actualizar(id: Long, dto: CineRequestDTO): CineResponseDTO
+    + eliminar(id: Long): void
+    + agregarSala(cineId: Long, dto: SalaRequestDTO): SalaResponseDTO
+    + listarSalas(cineId: Long): List<SalaResponseDTO>
+    + buscarEntidad(id: Long): Cine
+  }
+
+  class FuncionService <<Service>> {
+    - FuncionRepository funcionRepository
+    - PeliculaRepository peliculaRepository
+    - SalaRepository salaRepository
+    - ButacaRepository butacaRepository
+    - EntradaRepository entradaRepository
+    + listar(peliculaId: Long, cineId: Long, ciudad: String, fecha: LocalDate, formato: FormatoFuncion): List<FuncionResponseDTO>
+    + buscarPorId(id: Long): FuncionResponseDTO
+    + crear(dto: FuncionRequestDTO): FuncionResponseDTO
+    + actualizar(id: Long, dto: FuncionRequestDTO): FuncionResponseDTO
+    + eliminar(id: Long): void
+    + obtenerButacasDisponibles(funcionId: Long): List<ButacaResponseDTO>
+    + buscarEntidad(id: Long): Funcion
+    + validarHorario(funcion: Funcion, idIgnorado: Long): void
+  }
+
+  class CompraService <<Service>> {
+    - CompraRepository compraRepository
+    - EntradaRepository entradaRepository
+    - ButacaRepository butacaRepository
+    - ClienteService clienteService
+    - FuncionService funcionService
+    - PromocionService promocionService
+    + crearCompra(dto: CompraRequestDTO): CompraResponseDTO
+    + buscarPorId(id: Long): CompraResponseDTO
+    + listarPorCliente(clienteId: Long): List<CompraResponseDTO>
+    + cancelar(id: Long): CompraResponseDTO
+    + buscarEntidad(id: Long): Compra
+    + validarButacasDisponibles(funcion: Funcion, butacas: List<Butaca>, idsSolicitados: List<Long>): void
+  }
+
+  class PagoService <<Service>> {
+    - PagoRepository pagoRepository
+    - CompraService compraService
+    + registrarPago(compraId: Long, dto: PagoRequestDTO): PagoResponseDTO
+    + buscarPorId(id: Long): PagoResponseDTO
+  }
+
+  class PromocionService <<Service>> {
+    - PromocionRepository promocionRepository
+    + listarActivas(): List<PromocionResponseDTO>
+    + crear(dto: PromocionRequestDTO): PromocionResponseDTO
+    + buscarPorCodigo(codigo: String): Promocion
+    + validarPromocionParaCompra(codigo: String): Promocion
+  }
+}
+
+package "com.cineclick.controller" as controller {
+  class AuthController <<RestController>> {
+    - AuthService authService
+    + login(dto: LoginRequestDTO): LoginResponseDTO
+  }
+
+  class ClienteController <<RestController>> {
+    - ClienteService clienteService
+    - CompraService compraService
+    + listar(): List<ClienteResponseDTO>
+    + registrar(dto: ClienteRequestDTO): ClienteResponseDTO
+    + obtener(id: Long): ClienteResponseDTO
+    + actualizar(id: Long, dto: ClienteRequestDTO): ClienteResponseDTO
+    + eliminar(id: Long): void
+    + listarCompras(id: Long): List<CompraResponseDTO>
+  }
+
+  class PeliculaController <<RestController>> {
+    - PeliculaService peliculaService
+    + listar(genero: Genero): List<PeliculaResponseDTO>
+    + obtener(id: Long): PeliculaResponseDTO
+    + crear(dto: PeliculaRequestDTO): PeliculaResponseDTO
+    + actualizar(id: Long, dto: PeliculaRequestDTO): PeliculaResponseDTO
+    + eliminar(id: Long): void
+  }
+
+  class CineController <<RestController>> {
+    - CineService cineService
+    + listar(ciudad: String): List<CineResponseDTO>
+    + obtener(id: Long): CineResponseDTO
+    + crear(dto: CineRequestDTO): CineResponseDTO
+    + actualizar(id: Long, dto: CineRequestDTO): CineResponseDTO
+    + eliminar(id: Long): void
+    + listarSalas(id: Long): List<SalaResponseDTO>
+    + agregarSala(id: Long, dto: SalaRequestDTO): SalaResponseDTO
+  }
+
+  class FuncionController <<RestController>> {
+    - FuncionService funcionService
+    + listar(peliculaId: Long, cineId: Long, ciudad: String, fecha: LocalDate, formato: FormatoFuncion): List<FuncionResponseDTO>
+    + obtener(id: Long): FuncionResponseDTO
+    + crear(dto: FuncionRequestDTO): FuncionResponseDTO
+    + actualizar(id: Long, dto: FuncionRequestDTO): FuncionResponseDTO
+    + eliminar(id: Long): void
+    + obtenerButacasDisponibles(id: Long): List<ButacaResponseDTO>
+  }
+
+  class CompraController <<RestController>> {
+    - CompraService compraService
+    + crear(dto: CompraRequestDTO): CompraResponseDTO
+    + obtener(id: Long): CompraResponseDTO
+    + cancelar(id: Long): CompraResponseDTO
+  }
+
+  class PagoController <<RestController>> {
+    - PagoService pagoService
+    + registrarPago(compraId: Long, dto: PagoRequestDTO): PagoResponseDTO
+    + obtener(id: Long): PagoResponseDTO
+  }
+
+  class PromocionController <<RestController>> {
+    - PromocionService promocionService
+    + listarActivas(): List<PromocionResponseDTO>
+    + crear(dto: PromocionRequestDTO): PromocionResponseDTO
+  }
+}
+
+package "com.cineclick.exception" as exception {
+  class RecursoNoEncontradoException <<Exception>>
+  class ReglaNegocioException <<Exception>>
+  class ButacaNoDisponibleException <<Exception>>
+
+  class GlobalExceptionHandler <<RestControllerAdvice>> {
+    + manejarNotFound(ex: RecursoNoEncontradoException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarButacaNoDisponible(ex: ButacaNoDisponibleException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarReglaNegocio(ex: ReglaNegocioException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarValidacion(ex: MethodArgumentNotValidException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarIntegridad(ex: DataIntegrityViolationException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarGeneral(ex: Exception, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+  }
+}
+
+package "com.cineclick.config" as config {
+  class CineClickApplication <<SpringBootApplication>> {
+    + main(args: String[]): void
+  }
+
+  class DataSeeder <<Component>> {
+    - UsuarioRepository usuarioRepository
+    - PeliculaRepository peliculaRepository
+    - CineRepository cineRepository
+    - FuncionRepository funcionRepository
+    - PromocionRepository promocionRepository
+    + run(args: ApplicationArguments): void
+  }
+}
+
+' Relaciones de dominio
+Cliente "1" *-- "1" Usuario : usuario
+Cine "1" *-- "0..*" Sala : salas
+Sala "1" *-- "0..*" Butaca : butacas
+Funcion "0..*" --> "1" Pelicula : pelicula
+Funcion "0..*" --> "1" Sala : sala
+Compra "0..*" --> "1" Cliente : cliente
+Compra "0..*" --> "1" Funcion : funcion
+Compra "1" *-- "1..*" Entrada : entradas
+Compra "0..*" --> "0..1" Promocion : promocion
+Compra "1" -- "0..1" Pago : pago
+Entrada "0..*" --> "1" Funcion : funcion
+Entrada "0..*" --> "1" Butaca : butaca
+Pago "1" --> "1" Compra : compra
+
+' Enums usados por entidades y DTOs
+Usuario --> RolUsuario
+Pelicula --> Genero
+Pelicula --> FormatoFuncion
+Sala --> TipoSala
+Butaca --> TipoButaca
+Funcion --> FormatoFuncion
+Funcion --> EstadoFuncion
+Compra --> EstadoCompra
+Entrada --> EstadoEntrada
+Pago --> MetodoPago
+Pago --> EstadoPago
+
+' Repositories administran entidades JPA
+UsuarioRepository ..> Usuario
+ClienteRepository ..> Cliente
+PeliculaRepository ..> Pelicula
+CineRepository ..> Cine
+SalaRepository ..> Sala
+ButacaRepository ..> Butaca
+FuncionRepository ..> Funcion
+CompraRepository ..> Compra
+EntradaRepository ..> Entrada
+PagoRepository ..> Pago
+PromocionRepository ..> Promocion
+
+' Services dependen de repositories y otros services
+AuthService --> UsuarioRepository
+ClienteService --> ClienteRepository
+ClienteService --> UsuarioRepository
+PeliculaService --> PeliculaRepository
+CineService --> CineRepository
+CineService --> SalaRepository
+FuncionService --> FuncionRepository
+FuncionService --> PeliculaRepository
+FuncionService --> SalaRepository
+FuncionService --> ButacaRepository
+FuncionService --> EntradaRepository
+CompraService --> CompraRepository
+CompraService --> EntradaRepository
+CompraService --> ButacaRepository
+CompraService --> ClienteService
+CompraService --> FuncionService
+CompraService --> PromocionService
+PagoService --> PagoRepository
+PagoService --> CompraService
+PromocionService --> PromocionRepository
+
+' Controllers dependen de services y exponen DTOs
+AuthController --> AuthService
+ClienteController --> ClienteService
+ClienteController --> CompraService
+PeliculaController --> PeliculaService
+CineController --> CineService
+FuncionController --> FuncionService
+CompraController --> CompraService
+PagoController --> PagoService
+PromocionController --> PromocionService
+
+' Mapping y errores
+DtoMapper ..> model
+DtoMapper ..> dto
+GlobalExceptionHandler ..> ErrorResponseDTO
+ButacaNoDisponibleException --|> ReglaNegocioException
+ReglaNegocioException --|> RuntimeException
+RecursoNoEncontradoException --|> RuntimeException
+
+@enduml

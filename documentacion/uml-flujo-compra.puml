@@ -1,0 +1,79 @@
+@startuml CineClick_Flujo_Compra
+title CineClick Backend - Secuencia principal de compra de entradas
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+autonumber
+
+actor Cliente
+boundary "CompraController\n/api/compras" as CompraController
+control CompraService
+control ClienteService
+control FuncionService
+control PromocionService
+database ClienteRepository
+database FuncionRepository
+database ButacaRepository
+database EntradaRepository
+database CompraRepository
+entity Compra
+entity Entrada
+
+Cliente -> CompraController : POST /api/compras\nCompraRequestDTO
+CompraController -> CompraService : crearCompra(dto)
+
+CompraService -> CompraService : validarButacasSinDuplicados(dto.butacasIds)
+CompraService -> ClienteService : buscarEntidad(dto.clienteId)
+ClienteService -> ClienteRepository : findById(clienteId)
+ClienteRepository --> ClienteService : Cliente
+ClienteService --> CompraService : Cliente
+
+CompraService -> FuncionService : buscarEntidad(dto.funcionId)
+FuncionService -> FuncionRepository : findById(funcionId)
+FuncionRepository --> FuncionService : Funcion
+FuncionService --> CompraService : Funcion
+
+CompraService -> CompraService : funcion.estaDisponibleParaVenta()
+CompraService -> ButacaRepository : findAllById(dto.butacasIds)
+ButacaRepository --> CompraService : List<Butaca>
+
+CompraService -> CompraService : validarButacasDisponibles(funcion, butacas, ids)
+loop Por cada butaca solicitada
+  CompraService -> EntradaRepository : existsByFuncionIdAndButacaIdAndEstadoNot(funcionId, butacaId, CANCELADA)
+  EntradaRepository --> CompraService : ocupada?
+end
+
+alt Con codigo de promocion
+  CompraService -> PromocionService : validarPromocionParaCompra(codigo)
+  PromocionService --> CompraService : Promocion vigente
+end
+
+CompraService -> Compra : new Compra(cliente, funcion, promocion?)
+loop Por cada butaca disponible
+  CompraService -> Entrada : new Entrada(butaca, precioUnitario)
+  CompraService -> Entrada : generarCodigoQr()
+  CompraService -> Compra : agregarEntrada(entrada)
+end
+
+CompraService -> Compra : calcularTotal()
+CompraService -> CompraRepository : saveAndFlush(compra)
+
+alt La base acepta la restriccion unica
+  CompraRepository --> CompraService : Compra persistida
+  CompraService --> CompraController : CompraResponseDTO
+  CompraController --> Cliente : 201 Created
+else Otra compra gano la misma butaca al mismo tiempo
+  CompraRepository --> CompraService : DataIntegrityViolationException
+  CompraService --> CompraController : ButacaNoDisponibleException
+  CompraController --> Cliente : 409 Conflict
+end
+
+note over EntradaRepository, CompraRepository
+La defensa ante dos clientes queriendo la misma butaca:
+1. El service valida disponibilidad antes de guardar.
+2. La tabla entradas tiene restriccion unica (funcion_id, butaca_id).
+3. saveAndFlush fuerza la escritura dentro de la transaccion.
+4. Si dos requests compiten, solo uno inserta; el otro recibe 409.
+end note
+
+@enduml

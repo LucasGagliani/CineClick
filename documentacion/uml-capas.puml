@@ -1,0 +1,88 @@
+@startuml CineClick_Capas
+title CineClick Backend - Arquitectura por capas
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+left to right direction
+
+actor "Cliente HTTP\n(Postman/REST Client/Frontend futuro)" as HttpClient
+
+package "Controller\ncom.cineclick.controller" as controller {
+  class AuthController
+  class ClienteController
+  class PeliculaController
+  class CineController
+  class FuncionController
+  class CompraController
+  class PagoController
+  class PromocionController
+}
+
+package "DTO\ncom.cineclick.dto" as dto {
+  class "*RequestDTO" as RequestDTO
+  class "*ResponseDTO" as ResponseDTO
+  class ErrorResponseDTO
+  class DtoMapper
+}
+
+package "Service\ncom.cineclick.service" as service {
+  class AuthService
+  class ClienteService
+  class PeliculaService
+  class CineService
+  class FuncionService
+  class CompraService
+  class PagoService
+  class PromocionService
+}
+
+package "Repository\ncom.cineclick.repository" as repo {
+  interface "*Repository" as Repository
+}
+
+package "Model / ORM\ncom.cineclick.model" as model {
+  class Usuario
+  class Cliente
+  class Pelicula
+  class Cine
+  class Sala
+  class Butaca
+  class Funcion
+  class Compra
+  class Entrada
+  class Pago
+  class Promocion
+}
+
+package "Exception\ncom.cineclick.exception" as exception {
+  class GlobalExceptionHandler
+  class RecursoNoEncontradoException
+  class ReglaNegocioException
+  class ButacaNoDisponibleException
+}
+
+database "SQL DB\nH2 local" as DB
+
+HttpClient --> controller : JSON / HTTP
+controller --> RequestDTO : recibe
+controller --> service : delega casos de uso
+service --> Repository : consulta / persiste
+Repository --> model : entidades JPA
+Repository --> DB : SQL via Hibernate
+service --> DtoMapper : convierte entidades
+DtoMapper --> ResponseDTO : arma salida
+controller --> ResponseDTO : responde JSON
+service --> exception : lanza errores de negocio
+GlobalExceptionHandler --> ErrorResponseDTO : formato comun de error
+GlobalExceptionHandler --> controller : captura excepciones REST
+
+note bottom of service
+La logica importante esta en servicios:
+- altas, bajas logicas y actualizaciones
+- validaciones de horarios, formatos y promociones
+- compra de entradas y control de butacas
+- pago y confirmacion de compra
+end note
+
+@enduml
