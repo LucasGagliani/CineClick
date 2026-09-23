@@ -17,6 +17,7 @@ import com.cineclick.model.TipoButaca;
 import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.EntradaRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Set;
 
 @Service
+@RequiredArgsConstructor
 public class CompraService {
 
     private final CompraRepository compraRepository;
@@ -36,22 +38,6 @@ public class CompraService {
     private final ClienteService clienteService;
     private final FuncionService funcionService;
     private final PromocionService promocionService;
-
-    public CompraService(
-        CompraRepository compraRepository,
-        EntradaRepository entradaRepository,
-        ButacaRepository butacaRepository,
-        ClienteService clienteService,
-        FuncionService funcionService,
-        PromocionService promocionService
-    ) {
-        this.compraRepository = compraRepository;
-        this.entradaRepository = entradaRepository;
-        this.butacaRepository = butacaRepository;
-        this.clienteService = clienteService;
-        this.funcionService = funcionService;
-        this.promocionService = promocionService;
-    }
 
     @Transactional
     public CompraResponseDTO crearCompra(CompraRequestDTO dto) {

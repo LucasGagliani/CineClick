@@ -6,6 +6,7 @@ import com.cineclick.dto.SalaRequestDTO;
 import com.cineclick.dto.SalaResponseDTO;
 import com.cineclick.service.CineService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,13 +25,10 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/cines")
+@RequiredArgsConstructor
 public class CineController {
 
     private final CineService cineService;
-
-    public CineController(CineService cineService) {
-        this.cineService = cineService;
-    }
 
     @GetMapping
     public List<CineResponseDTO> listar(@RequestParam(required = false) String ciudad) {

@@ -15,12 +15,16 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Getter
+@Setter
 @Entity
 @Table(name = "compras")
 public class Compra {
@@ -85,77 +89,5 @@ public class Compra {
     public void cancelar() {
         estado = EstadoCompra.CANCELADA;
         entradas.forEach(Entrada::cancelar);
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public LocalDateTime getFechaCompra() {
-        return fechaCompra;
-    }
-
-    public void setFechaCompra(LocalDateTime fechaCompra) {
-        this.fechaCompra = fechaCompra;
-    }
-
-    public BigDecimal getTotal() {
-        return total;
-    }
-
-    public void setTotal(BigDecimal total) {
-        this.total = total;
-    }
-
-    public EstadoCompra getEstado() {
-        return estado;
-    }
-
-    public void setEstado(EstadoCompra estado) {
-        this.estado = estado;
-    }
-
-    public Cliente getCliente() {
-        return cliente;
-    }
-
-    public void setCliente(Cliente cliente) {
-        this.cliente = cliente;
-    }
-
-    public Funcion getFuncion() {
-        return funcion;
-    }
-
-    public void setFuncion(Funcion funcion) {
-        this.funcion = funcion;
-    }
-
-    public List<Entrada> getEntradas() {
-        return entradas;
-    }
-
-    public void setEntradas(List<Entrada> entradas) {
-        this.entradas = entradas;
-    }
-
-    public Promocion getPromocion() {
-        return promocion;
-    }
-
-    public void setPromocion(Promocion promocion) {
-        this.promocion = promocion;
-    }
-
-    public Pago getPago() {
-        return pago;
-    }
-
-    public void setPago(Pago pago) {
-        this.pago = pago;
     }
 }

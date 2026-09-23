@@ -13,21 +13,18 @@ import com.cineclick.model.Sala;
 import com.cineclick.model.TipoButaca;
 import com.cineclick.repository.CineRepository;
 import com.cineclick.repository.SalaRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class CineService {
 
     private final CineRepository cineRepository;
     private final SalaRepository salaRepository;
-
-    public CineService(CineRepository cineRepository, SalaRepository salaRepository) {
-        this.cineRepository = cineRepository;
-        this.salaRepository = salaRepository;
-    }
 
     @Transactional(readOnly = true)
     public List<CineResponseDTO> listar(String ciudad) {

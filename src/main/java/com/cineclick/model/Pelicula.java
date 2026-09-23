@@ -11,11 +11,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
+@Getter
+@Setter
 @Entity
 @Table(name = "peliculas")
 public class Pelicula {
@@ -65,93 +69,5 @@ public class Pelicula {
         if (duracionMinutos == null || duracionMinutos <= 0) {
             throw new IllegalArgumentException("La duracion debe ser mayor a cero");
         }
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getTitulo() {
-        return titulo;
-    }
-
-    public void setTitulo(String titulo) {
-        this.titulo = titulo;
-    }
-
-    public String getSinopsis() {
-        return sinopsis;
-    }
-
-    public void setSinopsis(String sinopsis) {
-        this.sinopsis = sinopsis;
-    }
-
-    public Integer getDuracionMinutos() {
-        return duracionMinutos;
-    }
-
-    public void setDuracionMinutos(Integer duracionMinutos) {
-        this.duracionMinutos = duracionMinutos;
-    }
-
-    public String getClasificacion() {
-        return clasificacion;
-    }
-
-    public void setClasificacion(String clasificacion) {
-        this.clasificacion = clasificacion;
-    }
-
-    public Genero getGenero() {
-        return genero;
-    }
-
-    public void setGenero(Genero genero) {
-        this.genero = genero;
-    }
-
-    public String getIdioma() {
-        return idioma;
-    }
-
-    public void setIdioma(String idioma) {
-        this.idioma = idioma;
-    }
-
-    public Set<FormatoFuncion> getFormatosDisponibles() {
-        return formatosDisponibles;
-    }
-
-    public void setFormatosDisponibles(Set<FormatoFuncion> formatosDisponibles) {
-        this.formatosDisponibles = formatosDisponibles;
-    }
-
-    public String getUrlPoster() {
-        return urlPoster;
-    }
-
-    public void setUrlPoster(String urlPoster) {
-        this.urlPoster = urlPoster;
-    }
-
-    public LocalDate getFechaEstreno() {
-        return fechaEstreno;
-    }
-
-    public void setFechaEstreno(LocalDate fechaEstreno) {
-        this.fechaEstreno = fechaEstreno;
-    }
-
-    public boolean isActiva() {
-        return activa;
-    }
-
-    public void setActiva(boolean activa) {
-        this.activa = activa;
     }
 }

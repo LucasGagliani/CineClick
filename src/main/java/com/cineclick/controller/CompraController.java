@@ -4,6 +4,7 @@ import com.cineclick.dto.CompraRequestDTO;
 import com.cineclick.dto.CompraResponseDTO;
 import com.cineclick.service.CompraService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,13 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/compras")
+@RequiredArgsConstructor
 public class CompraController {
 
     private final CompraService compraService;
-
-    public CompraController(CompraService compraService) {
-        this.compraService = compraService;
-    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

@@ -14,10 +14,14 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Getter
+@Setter
 @Entity
 @Table(
     name = "salas",
@@ -56,61 +60,5 @@ public class Sala {
     public void agregarButaca(Butaca butaca) {
         butaca.setSala(this);
         butacas.add(butaca);
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getNombre() {
-        return nombre;
-    }
-
-    public void setNombre(String nombre) {
-        this.nombre = nombre;
-    }
-
-    public Integer getNumero() {
-        return numero;
-    }
-
-    public void setNumero(Integer numero) {
-        this.numero = numero;
-    }
-
-    public TipoSala getTipo() {
-        return tipo;
-    }
-
-    public void setTipo(TipoSala tipo) {
-        this.tipo = tipo;
-    }
-
-    public boolean isActiva() {
-        return activa;
-    }
-
-    public void setActiva(boolean activa) {
-        this.activa = activa;
-    }
-
-    public Cine getCine() {
-        return cine;
-    }
-
-    public void setCine(Cine cine) {
-        this.cine = cine;
-    }
-
-    public List<Butaca> getButacas() {
-        return butacas;
-    }
-
-    public void setButacas(List<Butaca> butacas) {
-        this.butacas = butacas;
     }
 }

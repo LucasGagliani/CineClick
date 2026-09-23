@@ -5,6 +5,7 @@ import com.cineclick.dto.PeliculaResponseDTO;
 import com.cineclick.model.Genero;
 import com.cineclick.service.PeliculaService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,13 +24,10 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/peliculas")
+@RequiredArgsConstructor
 public class PeliculaController {
 
     private final PeliculaService peliculaService;
-
-    public PeliculaController(PeliculaService peliculaService) {
-        this.peliculaService = peliculaService;
-    }
 
     @GetMapping
     public List<PeliculaResponseDTO> listar(@RequestParam(required = false) Genero genero) {

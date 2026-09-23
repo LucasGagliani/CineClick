@@ -6,6 +6,7 @@ import com.cineclick.dto.FuncionResponseDTO;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.service.FuncionService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -26,13 +27,10 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/funciones")
+@RequiredArgsConstructor
 public class FuncionController {
 
     private final FuncionService funcionService;
-
-    public FuncionController(FuncionService funcionService) {
-        this.funcionService = funcionService;
-    }
 
     @GetMapping
     public List<FuncionResponseDTO> listar(

@@ -1,5 +1,5 @@
 @startuml CineClick_Codigo_Completo
-title CineClick Backend - UML exacto del proyecto actual
+title CineClick - Diagrama de clases
 
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
@@ -119,6 +119,7 @@ package "com.cineclick.model" as model {
     - String codigoQr
     - BigDecimal precioUnitario
     - EstadoEntrada estado = EMITIDA
+    - Boolean vigente = TRUE
     - Compra compra
     - Funcion funcion
     - Butaca butaca
@@ -464,6 +465,7 @@ package "com.cineclick.repository" as repo {
     + findByPeliculaId(peliculaId: Long): List<Funcion>
     + findBySalaId(salaId: Long): List<Funcion>
     + findByFechaHoraInicioBetween(desde: LocalDateTime, hasta: LocalDateTime): List<Funcion>
+    + buscarConFiltros(peliculaId: Long, cineId: Long, ciudad: String, formato: FormatoFuncion, desde: LocalDateTime, hasta: LocalDateTime): List<Funcion>
   }
 
   interface CompraRepository <<Repository>> {
@@ -646,12 +648,22 @@ package "com.cineclick.exception" as exception {
   class RecursoNoEncontradoException <<Exception>>
   class ReglaNegocioException <<Exception>>
   class ButacaNoDisponibleException <<Exception>>
+  class RecursoDuplicadoException <<Exception>>
+  class CredencialesInvalidasException <<Exception>>
 
   class GlobalExceptionHandler <<RestControllerAdvice>> {
     + manejarNotFound(ex: RecursoNoEncontradoException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
     + manejarButacaNoDisponible(ex: ButacaNoDisponibleException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarDuplicado(ex: RecursoDuplicadoException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarCredenciales(ex: CredencialesInvalidasException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
     + manejarReglaNegocio(ex: ReglaNegocioException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
     + manejarValidacion(ex: MethodArgumentNotValidException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarJsonInvalido(ex: HttpMessageNotReadableException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarTipoInvalido(ex: MethodArgumentTypeMismatchException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarParametroFaltante(ex: MissingServletRequestParameterException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarRutaInexistente(ex: NoResourceFoundException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarMetodoNoPermitido(ex: HttpRequestMethodNotSupportedException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
+    + manejarContentType(ex: HttpMediaTypeNotSupportedException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
     + manejarIntegridad(ex: DataIntegrityViolationException, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
     + manejarGeneral(ex: Exception, request: HttpServletRequest): ResponseEntity<ErrorResponseDTO>
   }
@@ -751,6 +763,8 @@ DtoMapper ..> model
 DtoMapper ..> dto
 GlobalExceptionHandler ..> ErrorResponseDTO
 ButacaNoDisponibleException --|> ReglaNegocioException
+RecursoDuplicadoException --|> ReglaNegocioException
+CredencialesInvalidasException --|> ReglaNegocioException
 ReglaNegocioException --|> RuntimeException
 RecursoNoEncontradoException --|> RuntimeException
 

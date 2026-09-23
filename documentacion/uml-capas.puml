@@ -1,5 +1,5 @@
 @startuml CineClick_Capas
-title CineClick Backend - Arquitectura por capas
+title CineClick - Capas
 
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
@@ -78,11 +78,9 @@ GlobalExceptionHandler --> ErrorResponseDTO : formato comun de error
 GlobalExceptionHandler --> controller : captura excepciones REST
 
 note bottom of service
-La logica importante esta en servicios:
-- altas, bajas logicas y actualizaciones
-- validaciones de horarios, formatos y promociones
-- compra de entradas y control de butacas
-- pago y confirmacion de compra
+Las reglas del negocio viven aca:
+horarios, formatos, promos,
+butacas libres, compras y pagos
 end note
 
 @enduml

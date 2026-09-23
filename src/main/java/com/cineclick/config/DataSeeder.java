@@ -18,6 +18,7 @@ import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.PeliculaRepository;
 import com.cineclick.repository.PromocionRepository;
 import com.cineclick.repository.UsuarioRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,7 @@ import java.time.LocalTime;
 import java.util.Set;
 
 @Component
+@RequiredArgsConstructor
 public class DataSeeder implements ApplicationRunner {
 
     private final UsuarioRepository usuarioRepository;
@@ -37,20 +39,6 @@ public class DataSeeder implements ApplicationRunner {
     private final CineRepository cineRepository;
     private final FuncionRepository funcionRepository;
     private final PromocionRepository promocionRepository;
-
-    public DataSeeder(
-        UsuarioRepository usuarioRepository,
-        PeliculaRepository peliculaRepository,
-        CineRepository cineRepository,
-        FuncionRepository funcionRepository,
-        PromocionRepository promocionRepository
-    ) {
-        this.usuarioRepository = usuarioRepository;
-        this.peliculaRepository = peliculaRepository;
-        this.cineRepository = cineRepository;
-        this.funcionRepository = funcionRepository;
-        this.promocionRepository = promocionRepository;
-    }
 
     @Override
     @Transactional

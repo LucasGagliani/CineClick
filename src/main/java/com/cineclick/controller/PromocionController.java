@@ -4,6 +4,7 @@ import com.cineclick.dto.PromocionRequestDTO;
 import com.cineclick.dto.PromocionResponseDTO;
 import com.cineclick.service.PromocionService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,13 +19,10 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/promociones")
+@RequiredArgsConstructor
 public class PromocionController {
 
     private final PromocionService promocionService;
-
-    public PromocionController(PromocionService promocionService) {
-        this.promocionService = promocionService;
-    }
 
     @GetMapping
     public List<PromocionResponseDTO> listarActivas() {

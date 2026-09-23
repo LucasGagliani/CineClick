@@ -4,6 +4,7 @@ import com.cineclick.dto.PagoRequestDTO;
 import com.cineclick.dto.PagoResponseDTO;
 import com.cineclick.service.PagoService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,13 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class PagoController {
 
     private final PagoService pagoService;
-
-    public PagoController(PagoService pagoService) {
-        this.pagoService = pagoService;
-    }
 
     @PostMapping("/compras/{compraId}/pagos")
     @ResponseStatus(HttpStatus.CREATED)

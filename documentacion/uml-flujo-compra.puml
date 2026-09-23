@@ -1,5 +1,5 @@
 @startuml CineClick_Flujo_Compra
-title CineClick Backend - Secuencia principal de compra de entradas
+title CineClick - Compra de entradas
 
 skinparam shadowing false
 skinparam sequenceMessageAlign center
@@ -69,11 +69,11 @@ else Otra compra gano la misma butaca al mismo tiempo
 end
 
 note over EntradaRepository, CompraRepository
-La defensa ante dos clientes queriendo la misma butaca:
-1. El service valida disponibilidad antes de guardar.
-2. La tabla entradas tiene restriccion unica (funcion_id, butaca_id).
-3. saveAndFlush fuerza la escritura dentro de la transaccion.
-4. Si dos requests compiten, solo uno inserta; el otro recibe 409.
+Si dos clientes quieren la misma butaca:
+- el service revisa que este libre antes de guardar
+- igual la tabla entradas tiene unique (funcion_id, butaca_id, vigente)
+- saveAndFlush escribe en el momento, asi el error salta aca
+- entra el primero, el segundo recibe 409
 end note
 
 @enduml

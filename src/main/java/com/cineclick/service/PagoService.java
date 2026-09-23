@@ -9,6 +9,7 @@ import com.cineclick.model.Compra;
 import com.cineclick.model.EstadoCompra;
 import com.cineclick.model.Pago;
 import com.cineclick.repository.PagoRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,15 +17,11 @@ import java.util.Locale;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class PagoService {
 
     private final PagoRepository pagoRepository;
     private final CompraService compraService;
-
-    public PagoService(PagoRepository pagoRepository, CompraService compraService) {
-        this.pagoRepository = pagoRepository;
-        this.compraService = compraService;
-    }
 
     @Transactional
     public PagoResponseDTO registrarPago(Long compraId, PagoRequestDTO dto) {

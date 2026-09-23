@@ -13,10 +13,14 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@Getter
+@Setter
 @Entity
 @Table(name = "funciones")
 public class Funcion {
@@ -67,77 +71,5 @@ public class Funcion {
 
     public void cambiarEstado(EstadoFuncion estado) {
         this.estado = estado;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public LocalDateTime getFechaHoraInicio() {
-        return fechaHoraInicio;
-    }
-
-    public void setFechaHoraInicio(LocalDateTime fechaHoraInicio) {
-        this.fechaHoraInicio = fechaHoraInicio;
-    }
-
-    public LocalDateTime getFechaHoraFin() {
-        return fechaHoraFin;
-    }
-
-    public void setFechaHoraFin(LocalDateTime fechaHoraFin) {
-        this.fechaHoraFin = fechaHoraFin;
-    }
-
-    public BigDecimal getPrecioBase() {
-        return precioBase;
-    }
-
-    public void setPrecioBase(BigDecimal precioBase) {
-        this.precioBase = precioBase;
-    }
-
-    public FormatoFuncion getFormato() {
-        return formato;
-    }
-
-    public void setFormato(FormatoFuncion formato) {
-        this.formato = formato;
-    }
-
-    public String getIdioma() {
-        return idioma;
-    }
-
-    public void setIdioma(String idioma) {
-        this.idioma = idioma;
-    }
-
-    public EstadoFuncion getEstado() {
-        return estado;
-    }
-
-    public void setEstado(EstadoFuncion estado) {
-        this.estado = estado;
-    }
-
-    public Pelicula getPelicula() {
-        return pelicula;
-    }
-
-    public void setPelicula(Pelicula pelicula) {
-        this.pelicula = pelicula;
-    }
-
-    public Sala getSala() {
-        return sala;
-    }
-
-    public void setSala(Sala sala) {
-        this.sala = sala;
     }
 }

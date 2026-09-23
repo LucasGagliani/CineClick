@@ -4,27 +4,24 @@ import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
 import com.cineclick.dto.DtoMapper;
 import com.cineclick.exception.RecursoNoEncontradoException;
-import com.cineclick.exception.ReglaNegocioException;
+import com.cineclick.exception.RecursoDuplicadoException;
 import com.cineclick.model.Cliente;
 import com.cineclick.model.RolUsuario;
 import com.cineclick.model.Usuario;
 import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.UsuarioRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class ClienteService {
 
     private final ClienteRepository clienteRepository;
     private final UsuarioRepository usuarioRepository;
-
-    public ClienteService(ClienteRepository clienteRepository, UsuarioRepository usuarioRepository) {
-        this.clienteRepository = clienteRepository;
-        this.usuarioRepository = usuarioRepository;
-    }
 
     @Transactional(readOnly = true)
     public List<ClienteResponseDTO> listar() {
@@ -81,7 +78,7 @@ public class ClienteService {
 
     public void validarEmailUnico(String email) {
         if (usuarioRepository.existsByEmailIgnoreCase(email)) {
-            throw new ReglaNegocioException("Ya existe un usuario registrado con el email " + email);
+            throw new RecursoDuplicadoException("Ya existe un usuario registrado con el email " + email);
         }
     }
 }

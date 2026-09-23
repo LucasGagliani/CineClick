@@ -8,19 +8,17 @@ import com.cineclick.exception.ReglaNegocioException;
 import com.cineclick.model.Genero;
 import com.cineclick.model.Pelicula;
 import com.cineclick.repository.PeliculaRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class PeliculaService {
 
     private final PeliculaRepository peliculaRepository;
-
-    public PeliculaService(PeliculaRepository peliculaRepository) {
-        this.peliculaRepository = peliculaRepository;
-    }
 
     @Transactional(readOnly = true)
     public List<PeliculaResponseDTO> listar(Genero genero) {

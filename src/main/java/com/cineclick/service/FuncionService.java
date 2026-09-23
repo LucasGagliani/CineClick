@@ -19,6 +19,7 @@ import com.cineclick.repository.EntradaRepository;
 import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.PeliculaRepository;
 import com.cineclick.repository.SalaRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class FuncionService {
 
     private final FuncionRepository funcionRepository;
@@ -37,28 +39,12 @@ public class FuncionService {
     private final ButacaRepository butacaRepository;
     private final EntradaRepository entradaRepository;
 
-    public FuncionService(
-        FuncionRepository funcionRepository,
-        PeliculaRepository peliculaRepository,
-        SalaRepository salaRepository,
-        ButacaRepository butacaRepository,
-        EntradaRepository entradaRepository
-    ) {
-        this.funcionRepository = funcionRepository;
-        this.peliculaRepository = peliculaRepository;
-        this.salaRepository = salaRepository;
-        this.butacaRepository = butacaRepository;
-        this.entradaRepository = entradaRepository;
-    }
-
     @Transactional(readOnly = true)
     public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, String ciudad, LocalDate fecha, FormatoFuncion formato) {
-        return funcionRepository.findAll().stream()
-            .filter(funcion -> peliculaId == null || funcion.getPelicula().getId().equals(peliculaId))
-            .filter(funcion -> cineId == null || funcion.getSala().getCine().getId().equals(cineId))
-            .filter(funcion -> ciudad == null || ciudad.isBlank() || funcion.getSala().getCine().getCiudad().equalsIgnoreCase(ciudad))
-            .filter(funcion -> fecha == null || funcion.getFechaHoraInicio().toLocalDate().equals(fecha))
-            .filter(funcion -> formato == null || funcion.getFormato() == formato)
+        String ciudadFiltro = ciudad == null || ciudad.isBlank() ? null : ciudad;
+        LocalDateTime desde = fecha == null ? null : fecha.atStartOfDay();
+        LocalDateTime hasta = fecha == null ? null : fecha.plusDays(1).atStartOfDay();
+        return funcionRepository.buscarConFiltros(peliculaId, cineId, ciudadFiltro, formato, desde, hasta).stream()
             .map(DtoMapper::toFuncionResponse)
             .toList();
     }

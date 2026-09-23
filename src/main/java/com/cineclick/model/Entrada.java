@@ -12,14 +12,21 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
+@Getter
+@Setter
 @Entity
 @Table(
     name = "entradas",
-    uniqueConstraints = @UniqueConstraint(name = "uk_entrada_funcion_butaca", columnNames = {"funcion_id", "butaca_id"})
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_entrada_funcion_butaca_vigente",
+        columnNames = {"funcion_id", "butaca_id", "vigente"}
+    )
 )
 public class Entrada {
 
@@ -36,6 +43,11 @@ public class Entrada {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EstadoEntrada estado = EstadoEntrada.EMITIDA;
+
+    // TRUE si la entrada esta activa, NULL si se cancelo.
+    // El unique no compara NULLs, asi una entrada cancelada no bloquea la butaca.
+    @Column
+    private Boolean vigente = Boolean.TRUE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "compra_id", nullable = false)
@@ -61,61 +73,6 @@ public class Entrada {
 
     public void cancelar() {
         estado = EstadoEntrada.CANCELADA;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getCodigoQr() {
-        return codigoQr;
-    }
-
-    public void setCodigoQr(String codigoQr) {
-        this.codigoQr = codigoQr;
-    }
-
-    public BigDecimal getPrecioUnitario() {
-        return precioUnitario;
-    }
-
-    public void setPrecioUnitario(BigDecimal precioUnitario) {
-        this.precioUnitario = precioUnitario;
-    }
-
-    public EstadoEntrada getEstado() {
-        return estado;
-    }
-
-    public void setEstado(EstadoEntrada estado) {
-        this.estado = estado;
-    }
-
-    public Compra getCompra() {
-        return compra;
-    }
-
-    public void setCompra(Compra compra) {
-        this.compra = compra;
-    }
-
-    public Funcion getFuncion() {
-        return funcion;
-    }
-
-    public void setFuncion(Funcion funcion) {
-        this.funcion = funcion;
-    }
-
-    public Butaca getButaca() {
-        return butaca;
-    }
-
-    public void setButaca(Butaca butaca) {
-        this.butaca = butaca;
+        vigente = null;
     }
 }

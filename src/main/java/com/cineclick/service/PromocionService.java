@@ -7,6 +7,7 @@ import com.cineclick.exception.RecursoNoEncontradoException;
 import com.cineclick.exception.ReglaNegocioException;
 import com.cineclick.model.Promocion;
 import com.cineclick.repository.PromocionRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,13 +15,10 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class PromocionService {
 
     private final PromocionRepository promocionRepository;
-
-    public PromocionService(PromocionRepository promocionRepository) {
-        this.promocionRepository = promocionRepository;
-    }
 
     @Transactional(readOnly = true)
     public List<PromocionResponseDTO> listarActivas() {

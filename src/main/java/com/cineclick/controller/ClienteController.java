@@ -6,6 +6,7 @@ import com.cineclick.dto.CompraResponseDTO;
 import com.cineclick.service.ClienteService;
 import com.cineclick.service.CompraService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,15 +24,11 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/clientes")
+@RequiredArgsConstructor
 public class ClienteController {
 
     private final ClienteService clienteService;
     private final CompraService compraService;
-
-    public ClienteController(ClienteService clienteService, CompraService compraService) {
-        this.clienteService = clienteService;
-        this.compraService = compraService;
-    }
 
     @GetMapping
     public List<ClienteResponseDTO> listar() {
