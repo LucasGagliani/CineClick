@@ -3,7 +3,9 @@ package com.cineclick.service;
 import com.cineclick.dto.LoginRequestDTO;
 import com.cineclick.dto.LoginResponseDTO;
 import com.cineclick.exception.CredencialesInvalidasException;
+import com.cineclick.model.Cliente;
 import com.cineclick.model.Usuario;
+import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
+    private final ClienteRepository clienteRepository;
 
     @Transactional(readOnly = true)
     public LoginResponseDTO login(LoginRequestDTO dto) {
@@ -22,8 +25,14 @@ public class AuthService {
         if (!usuario.isActivo() || !usuario.getPassword().equals(dto.password())) {
             throw new CredencialesInvalidasException("Email o password incorrectos");
         }
+        Long clienteId = clienteRepository.findByUsuarioEmailIgnoreCase(usuario.getEmail())
+            .map(Cliente::getId)
+            .orElse(null);
         return new LoginResponseDTO(
             usuario.getId(),
+            clienteId,
+            usuario.getNombre(),
+            usuario.getApellido(),
             usuario.nombreCompleto(),
             usuario.getEmail(),
             usuario.getRol(),
