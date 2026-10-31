@@ -21,6 +21,7 @@ import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,10 +40,12 @@ public class DataSeeder implements ApplicationRunner {
     private final CineRepository cineRepository;
     private final FuncionRepository funcionRepository;
     private final PromocionRepository promocionRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        quitarRestriccionViejaDeButacas();
         crearUsuariosDemo();
         if (peliculaRepository.count() == 0 && cineRepository.count() == 0) {
             crearDominioDemo();
@@ -50,6 +53,10 @@ public class DataSeeder implements ApplicationRunner {
         if (promocionRepository.count() == 0) {
             crearPromocionesDemo();
         }
+    }
+
+    private void quitarRestriccionViejaDeButacas() {
+        jdbcTemplate.execute("ALTER TABLE entradas DROP CONSTRAINT IF EXISTS uk_entrada_funcion_butaca");
     }
 
     private void crearUsuariosDemo() {
