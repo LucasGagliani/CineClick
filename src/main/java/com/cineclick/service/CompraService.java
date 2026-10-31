@@ -3,6 +3,7 @@ package com.cineclick.service;
 import com.cineclick.dto.CompraRequestDTO;
 import com.cineclick.dto.CompraResponseDTO;
 import com.cineclick.dto.DtoMapper;
+import com.cineclick.dto.EntradaSolicitadaDTO;
 import com.cineclick.exception.ButacaNoDisponibleException;
 import com.cineclick.exception.RecursoNoEncontradoException;
 import com.cineclick.exception.ReglaNegocioException;
@@ -14,7 +15,7 @@ import com.cineclick.model.Entrada;
 import com.cineclick.model.EstadoEntrada;
 import com.cineclick.model.Funcion;
 import com.cineclick.model.Promocion;
-import com.cineclick.model.TipoButaca;
+import com.cineclick.model.TipoEntrada;
 import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.EntradaRepository;
@@ -23,14 +24,17 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -53,6 +57,7 @@ public class CompraService {
     @Transactional
     public CompraResponseDTO crearCompra(CompraRequestDTO dto) {
         validarButacasSinDuplicados(dto.butacasIds());
+        List<TipoEntrada> tipos = tiposPorButaca(dto.entradas(), dto.butacasIds().size());
         Cliente cliente = clienteService.buscarEntidad(dto.clienteId());
         Funcion funcion = funcionService.buscarEntidad(dto.funcionId());
         if (!funcion.estaDisponibleParaVenta()) {
@@ -60,7 +65,7 @@ public class CompraService {
         }
         vencimientoReservaService.cancelarVencidas(funcion.getId());
 
-        List<Butaca> butacas = butacaRepository.findAllById(dto.butacasIds());
+        List<Butaca> butacas = ordenarComoSeSolicitaron(butacaRepository.findAllById(dto.butacasIds()), dto.butacasIds());
         validarButacasDisponibles(funcion, butacas, dto.butacasIds());
 
         Compra compra = new Compra();
@@ -73,10 +78,11 @@ public class CompraService {
         }
 
         Set<String> codigosGenerados = new HashSet<>();
-        for (Butaca butaca : butacas) {
+        for (int i = 0; i < butacas.size(); i++) {
             Entrada entrada = new Entrada();
-            entrada.setButaca(butaca);
-            entrada.setPrecioUnitario(calcularPrecioButaca(funcion.getPrecioBase(), butaca));
+            entrada.setButaca(butacas.get(i));
+            entrada.setTipo(tipos.get(i));
+            entrada.setPrecioUnitario(tipos.get(i).precioPara(funcion.getPrecioBase()));
             entrada.setCodigoQr(generarCodigoEntrada(codigosGenerados));
             compra.agregarEntrada(entrada);
         }
@@ -181,13 +187,24 @@ public class CompraService {
         return codigo;
     }
 
-    private BigDecimal calcularPrecioButaca(BigDecimal precioBase, Butaca butaca) {
-        if (butaca.getTipo() == TipoButaca.VIP) {
-            return precioBase.multiply(BigDecimal.valueOf(1.30)).setScale(2, RoundingMode.HALF_UP);
+    private List<TipoEntrada> tiposPorButaca(List<EntradaSolicitadaDTO> entradas, int cantidadButacas) {
+        int cantidadEntradas = entradas.stream().mapToInt(EntradaSolicitadaDTO::cantidad).sum();
+        if (cantidadEntradas != cantidadButacas) {
+            throw new ReglaNegocioException(
+                "La cantidad de entradas (" + cantidadEntradas + ") no coincide con la cantidad de butacas elegidas (" + cantidadButacas + ")"
+            );
         }
-        if (butaca.getTipo() == TipoButaca.DISCAPACIDAD) {
-            return precioBase.multiply(BigDecimal.valueOf(0.80)).setScale(2, RoundingMode.HALF_UP);
+        List<TipoEntrada> tipos = new ArrayList<>();
+        for (EntradaSolicitadaDTO entrada : entradas) {
+            for (int i = 0; i < entrada.cantidad(); i++) {
+                tipos.add(entrada.tipo());
+            }
         }
-        return precioBase.setScale(2, RoundingMode.HALF_UP);
+        return tipos;
+    }
+
+    private static List<Butaca> ordenarComoSeSolicitaron(List<Butaca> butacas, List<Long> idsSolicitados) {
+        Map<Long, Butaca> porId = butacas.stream().collect(Collectors.toMap(Butaca::getId, Function.identity()));
+        return idsSolicitados.stream().map(porId::get).filter(Objects::nonNull).toList();
     }
 }

@@ -11,7 +11,9 @@ import com.cineclick.model.Pago;
 import com.cineclick.model.Pelicula;
 import com.cineclick.model.Promocion;
 import com.cineclick.model.Sala;
+import com.cineclick.model.TipoEntrada;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Set;
@@ -75,6 +77,10 @@ public final class DtoMapper {
         );
     }
 
+    public static PrecioEntradaDTO toPrecioEntrada(TipoEntrada tipo, BigDecimal precioBase) {
+        return new PrecioEntradaDTO(tipo, tipo.getNombre(), tipo.getSeccion(), tipo.getCondiciones(), tipo.precioPara(precioBase));
+    }
+
     public static FuncionResponseDTO toFuncionResponse(Funcion funcion, Integer butacasLibres, Integer capacidadSala) {
         return new FuncionResponseDTO(
             funcion.getId(),
@@ -118,7 +124,9 @@ public final class DtoMapper {
             compra.getFuncion().getId(),
             compra.getFuncion().getPelicula().getTitulo(),
             compra.getFechaCompra(),
+            compra.calcularSubtotal(),
             compra.getTotal(),
+            compra.getPromocion() == null ? null : compra.getPromocion().getCodigo(),
             compra.getEstado(),
             compra.getEntradas().stream().map(DtoMapper::toEntradaResponse).toList(),
             compra.getPago() == null ? null : toPagoResponse(compra.getPago()),
@@ -134,6 +142,7 @@ public final class DtoMapper {
             entrada.getButaca().getFila(),
             entrada.getButaca().getNumero(),
             entrada.getButaca().codigo(),
+            entrada.getTipo() == null ? TipoEntrada.GENERAL : entrada.getTipo(),
             entrada.getPrecioUnitario(),
             entrada.getEstado()
         );

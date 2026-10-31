@@ -43,6 +43,10 @@ public class Entrada {
     @Column(nullable = false)
     private EstadoEntrada estado = EstadoEntrada.EMITIDA;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private TipoEntrada tipo = TipoEntrada.GENERAL;
+
     @Column
     private Boolean vigente = Boolean.TRUE;
 

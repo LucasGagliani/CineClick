@@ -4,6 +4,7 @@ import com.cineclick.dto.ButacaResponseDTO;
 import com.cineclick.dto.DtoMapper;
 import com.cineclick.dto.FuncionRequestDTO;
 import com.cineclick.dto.FuncionResponseDTO;
+import com.cineclick.dto.PrecioEntradaDTO;
 import com.cineclick.exception.RecursoNoEncontradoException;
 import com.cineclick.exception.ReglaNegocioException;
 import com.cineclick.model.Butaca;
@@ -14,6 +15,7 @@ import com.cineclick.model.FormatoFuncion;
 import com.cineclick.model.Funcion;
 import com.cineclick.model.Pelicula;
 import com.cineclick.model.Sala;
+import com.cineclick.model.TipoEntrada;
 import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.EntradaRepository;
 import com.cineclick.repository.FuncionRepository;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -89,6 +92,14 @@ public class FuncionService {
             .collect(Collectors.toSet());
         return butacaRepository.findBySalaIdAndActivaTrue(funcion.getSala().getId()).stream()
             .map(butaca -> DtoMapper.toButacaResponse(butaca, !butacasOcupadas.contains(butaca.getId())))
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PrecioEntradaDTO> listarPrecios(Long funcionId) {
+        Funcion funcion = buscarEntidad(funcionId);
+        return Arrays.stream(TipoEntrada.values())
+            .map(tipo -> DtoMapper.toPrecioEntrada(tipo, funcion.getPrecioBase()))
             .toList();
     }
 

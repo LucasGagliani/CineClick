@@ -3,6 +3,7 @@ package com.cineclick.controller;
 import com.cineclick.dto.ButacaResponseDTO;
 import com.cineclick.dto.FuncionRequestDTO;
 import com.cineclick.dto.FuncionResponseDTO;
+import com.cineclick.dto.PrecioEntradaDTO;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.service.FuncionService;
 import jakarta.validation.Valid;
@@ -68,5 +69,10 @@ public class FuncionController {
     @GetMapping("/{id}/butacas-disponibles")
     public List<ButacaResponseDTO> obtenerButacasDisponibles(@PathVariable Long id) {
         return funcionService.obtenerButacasDisponibles(id);
+    }
+
+    @GetMapping("/{id}/precios")
+    public List<PrecioEntradaDTO> listarPrecios(@PathVariable Long id) {
+        return funcionService.listarPrecios(id);
     }
 }

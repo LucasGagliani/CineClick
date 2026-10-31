@@ -1,6 +1,7 @@
 package com.cineclick.dto;
 
 import com.cineclick.model.EstadoEntrada;
+import com.cineclick.model.TipoEntrada;
 
 import java.math.BigDecimal;
 
@@ -10,6 +11,7 @@ public record EntradaResponseDTO(
     String fila,
     Integer numeroButaca,
     String codigoButaca,
+    TipoEntrada tipo,
     BigDecimal precioUnitario,
     EstadoEntrada estado
 ) {

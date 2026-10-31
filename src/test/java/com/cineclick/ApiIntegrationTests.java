@@ -5,6 +5,7 @@ import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
 import com.cineclick.dto.CompraRequestDTO;
 import com.cineclick.dto.CompraResponseDTO;
+import com.cineclick.dto.EntradaSolicitadaDTO;
 import com.cineclick.dto.ErrorResponseDTO;
 import com.cineclick.dto.FuncionResponseDTO;
 import com.cineclick.dto.LoginRequestDTO;
@@ -12,6 +13,7 @@ import com.cineclick.dto.PeliculaRequestDTO;
 import com.cineclick.dto.PeliculaResponseDTO;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.model.Genero;
+import com.cineclick.model.TipoEntrada;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -173,7 +175,13 @@ class ApiIntegrationTests {
             url("/api/funciones/" + funcion.id() + "/butacas-disponibles"),
             ButacaResponseDTO[].class
         )[0];
-        CompraRequestDTO compra = new CompraRequestDTO(cliente.id(), funcion.id(), List.of(butaca.id()), null);
+        CompraRequestDTO compra = new CompraRequestDTO(
+            cliente.id(),
+            funcion.id(),
+            List.of(butaca.id()),
+            List.of(new EntradaSolicitadaDTO(TipoEntrada.GENERAL, 1)),
+            null
+        );
 
         ResponseEntity<CompraResponseDTO> primera = restTemplate.postForEntity(url("/api/compras"), compra, CompraResponseDTO.class);
         assertThat(primera.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -185,6 +193,29 @@ class ApiIntegrationTests {
 
         ResponseEntity<CompraResponseDTO> recompra = restTemplate.postForEntity(url("/api/compras"), compra, CompraResponseDTO.class);
         assertThat(recompra.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void rechazaReservaConCantidadDeEntradasDistintaALaDeButacas() {
+        ClienteResponseDTO cliente = crearCliente("sofia.cantidad@example.com");
+        FuncionResponseDTO funcion = restTemplate.getForObject(url("/api/funciones"), FuncionResponseDTO[].class)[0];
+        ButacaResponseDTO[] butacas = restTemplate.getForObject(
+            url("/api/funciones/" + funcion.id() + "/butacas-disponibles"),
+            ButacaResponseDTO[].class
+        );
+        CompraRequestDTO compra = new CompraRequestDTO(
+            cliente.id(),
+            funcion.id(),
+            List.of(butacas[1].id(), butacas[2].id()),
+            List.of(new EntradaSolicitadaDTO(TipoEntrada.GENERAL, 1), new EntradaSolicitadaDTO(TipoEntrada.MENOR, 2)),
+            null
+        );
+
+        ResponseEntity<ErrorResponseDTO> response = restTemplate.postForEntity(url("/api/compras"), compra, ErrorResponseDTO.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().mensaje()).contains("no coincide");
     }
 
     @Test
@@ -236,6 +267,16 @@ class ApiIntegrationTests {
             String.class
         );
         assertThat(duplicado.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    private ClienteResponseDTO crearCliente(String email) {
+        ClienteResponseDTO cliente = restTemplate.postForEntity(
+            url("/api/clientes"),
+            new ClienteRequestDTO("Cliente", "Prueba", email, "1234", null),
+            ClienteResponseDTO.class
+        ).getBody();
+        assertThat(cliente).isNotNull();
+        return cliente;
     }
 
     private String url(String path) {

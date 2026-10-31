@@ -77,10 +77,14 @@ public class Compra {
         entradas.add(entrada);
     }
 
-    public BigDecimal calcularTotal() {
-        BigDecimal subtotal = entradas.stream()
+    public BigDecimal calcularSubtotal() {
+        return entradas.stream()
             .map(Entrada::getPrecioUnitario)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public BigDecimal calcularTotal() {
+        BigDecimal subtotal = calcularSubtotal();
         total = promocion == null ? subtotal : promocion.calcularDescuento(subtotal);
         return total;
     }
