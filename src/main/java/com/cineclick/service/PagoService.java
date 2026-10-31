@@ -3,17 +3,19 @@ package com.cineclick.service;
 import com.cineclick.dto.DtoMapper;
 import com.cineclick.dto.PagoRequestDTO;
 import com.cineclick.dto.PagoResponseDTO;
+import com.cineclick.exception.RecursoDuplicadoException;
 import com.cineclick.exception.RecursoNoEncontradoException;
-import com.cineclick.exception.ReglaNegocioException;
 import com.cineclick.model.Compra;
-import com.cineclick.model.EstadoCompra;
+import com.cineclick.model.EstadoPago;
 import com.cineclick.model.Pago;
 import com.cineclick.repository.PagoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -26,13 +28,14 @@ public class PagoService {
     @Transactional
     public PagoResponseDTO registrarPago(Long compraId, PagoRequestDTO dto) {
         Compra compra = compraService.buscarEntidad(compraId);
-        if (compra.getEstado() == EstadoCompra.CANCELADA) {
-            throw new ReglaNegocioException("No se puede pagar una compra cancelada");
+        Optional<Pago> existente = pagoRepository.findByCompraId(compraId);
+
+        if (existente.isPresent() && existente.get().getEstado() == EstadoPago.APROBADO) {
+            return DtoMapper.toPagoResponse(existente.get());
         }
-        if (pagoRepository.findByCompraId(compraId).isPresent()) {
-            throw new ReglaNegocioException("La compra ya tiene un pago asociado");
-        }
-        Pago pago = new Pago();
+        compraService.verificarReservaActiva(compra);
+
+        Pago pago = existente.orElseGet(Pago::new);
         pago.setCompra(compra);
         pago.setMonto(compra.getTotal());
         pago.setMetodoPago(dto.metodoPago());
@@ -44,7 +47,11 @@ public class PagoService {
             compra.confirmar();
         }
         compra.setPago(pago);
-        return DtoMapper.toPagoResponse(pagoRepository.save(pago));
+        try {
+            return DtoMapper.toPagoResponse(pagoRepository.saveAndFlush(pago));
+        } catch (DataIntegrityViolationException ex) {
+            throw new RecursoDuplicadoException("La compra ya tiene un pago en proceso");
+        }
     }
 
     @Transactional(readOnly = true)
