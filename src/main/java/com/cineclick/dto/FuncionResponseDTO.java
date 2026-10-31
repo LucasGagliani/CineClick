@@ -19,6 +19,8 @@ public record FuncionResponseDTO(
     BigDecimal precioBase,
     FormatoFuncion formato,
     String idioma,
-    EstadoFuncion estado
+    EstadoFuncion estado,
+    Integer butacasLibres,
+    Integer capacidadSala
 ) {
 }

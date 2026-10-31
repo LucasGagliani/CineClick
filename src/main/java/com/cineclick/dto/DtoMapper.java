@@ -73,7 +73,7 @@ public final class DtoMapper {
         );
     }
 
-    public static FuncionResponseDTO toFuncionResponse(Funcion funcion) {
+    public static FuncionResponseDTO toFuncionResponse(Funcion funcion, Integer butacasLibres, Integer capacidadSala) {
         return new FuncionResponseDTO(
             funcion.getId(),
             funcion.getPelicula().getId(),
@@ -87,7 +87,9 @@ public final class DtoMapper {
             funcion.getPrecioBase(),
             funcion.getFormato(),
             funcion.getIdioma(),
-            funcion.getEstado()
+            funcion.getEstado(),
+            butacasLibres,
+            capacidadSala
         );
     }
 

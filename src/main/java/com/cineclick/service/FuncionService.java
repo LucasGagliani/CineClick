@@ -25,7 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -44,14 +47,12 @@ public class FuncionService {
         String ciudadFiltro = ciudad == null || ciudad.isBlank() ? null : ciudad;
         LocalDateTime desde = fecha == null ? null : fecha.atStartOfDay();
         LocalDateTime hasta = fecha == null ? null : fecha.plusDays(1).atStartOfDay();
-        return funcionRepository.buscarConFiltros(peliculaId, cineId, ciudadFiltro, formato, desde, hasta).stream()
-            .map(DtoMapper::toFuncionResponse)
-            .toList();
+        return toResponses(funcionRepository.buscarConFiltros(peliculaId, cineId, ciudadFiltro, formato, desde, hasta));
     }
 
     @Transactional(readOnly = true)
     public FuncionResponseDTO buscarPorId(Long id) {
-        return DtoMapper.toFuncionResponse(buscarEntidad(id));
+        return toResponses(List.of(buscarEntidad(id))).get(0);
     }
 
     @Transactional
@@ -59,7 +60,7 @@ public class FuncionService {
         Funcion funcion = new Funcion();
         copiarDatos(dto, funcion);
         validarHorario(funcion, null);
-        return DtoMapper.toFuncionResponse(funcionRepository.save(funcion));
+        return toResponses(List.of(funcionRepository.save(funcion))).get(0);
     }
 
     @Transactional
@@ -67,7 +68,7 @@ public class FuncionService {
         Funcion funcion = buscarEntidad(id);
         copiarDatos(dto, funcion);
         validarHorario(funcion, id);
-        return DtoMapper.toFuncionResponse(funcionRepository.save(funcion));
+        return toResponses(List.of(funcionRepository.save(funcion))).get(0);
     }
 
     @Transactional
@@ -111,6 +112,33 @@ public class FuncionService {
         if (seSolapa) {
             throw new ReglaNegocioException("La sala ya tiene una funcion programada en ese horario");
         }
+    }
+
+    private List<FuncionResponseDTO> toResponses(List<Funcion> funciones) {
+        if (funciones.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Long> vendidasPorFuncion = contarPorId(entradaRepository.contarVigentesPorFuncion(
+            funciones.stream().map(Funcion::getId).toList()
+        ));
+        Map<Long, Long> capacidadPorSala = contarPorId(butacaRepository.contarActivasPorSala(
+            funciones.stream().map(funcion -> funcion.getSala().getId()).collect(Collectors.toSet())
+        ));
+        return funciones.stream()
+            .map(funcion -> {
+                long capacidad = capacidadPorSala.getOrDefault(funcion.getSala().getId(), 0L);
+                long vendidas = vendidasPorFuncion.getOrDefault(funcion.getId(), 0L);
+                return DtoMapper.toFuncionResponse(funcion, (int) Math.max(0, capacidad - vendidas), (int) capacidad);
+            })
+            .toList();
+    }
+
+    private Map<Long, Long> contarPorId(Collection<Object[]> filas) {
+        Map<Long, Long> conteo = new HashMap<>();
+        for (Object[] fila : filas) {
+            conteo.put((Long) fila[0], (Long) fila[1]);
+        }
+        return conteo;
     }
 
     private void copiarDatos(FuncionRequestDTO dto, Funcion funcion) {
