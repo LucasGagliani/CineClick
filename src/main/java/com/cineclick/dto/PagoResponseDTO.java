@@ -12,6 +12,8 @@ public record PagoResponseDTO(
     MetodoPago metodoPago,
     EstadoPago estado,
     LocalDateTime fechaPago,
-    String codigoTransaccion
+    String codigoTransaccion,
+    String marcaTarjeta,
+    String ultimos4
 ) {
 }

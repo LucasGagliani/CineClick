@@ -43,6 +43,12 @@ public class Pago {
     @Column(length = 120)
     private String codigoTransaccion;
 
+    @Column(length = 20)
+    private String marcaTarjeta;
+
+    @Column(length = 4)
+    private String ultimos4;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "compra_id", nullable = false, unique = true)
     private Compra compra;

@@ -155,7 +155,9 @@ public final class DtoMapper {
             pago.getMetodoPago(),
             pago.getEstado(),
             pago.getFechaPago(),
-            pago.getCodigoTransaccion()
+            pago.getCodigoTransaccion(),
+            pago.getMarcaTarjeta(),
+            pago.getUltimos4()
         );
     }
 

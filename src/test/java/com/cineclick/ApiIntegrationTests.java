@@ -9,10 +9,13 @@ import com.cineclick.dto.EntradaSolicitadaDTO;
 import com.cineclick.dto.ErrorResponseDTO;
 import com.cineclick.dto.FuncionResponseDTO;
 import com.cineclick.dto.LoginRequestDTO;
+import com.cineclick.dto.PagoRequestDTO;
 import com.cineclick.dto.PeliculaRequestDTO;
 import com.cineclick.dto.PeliculaResponseDTO;
 import com.cineclick.model.FormatoFuncion;
+import com.cineclick.model.EstadoCompra;
 import com.cineclick.model.Genero;
+import com.cineclick.model.MetodoPago;
 import com.cineclick.model.TipoEntrada;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -216,6 +219,38 @@ class ApiIntegrationTests {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().mensaje()).contains("no coincide");
+    }
+
+    @Test
+    void rechazaPagoSinAceptarTerminos() {
+        ClienteResponseDTO cliente = crearCliente("pablo.terminos@example.com");
+        FuncionResponseDTO funcion = restTemplate.getForObject(url("/api/funciones"), FuncionResponseDTO[].class)[0];
+        ButacaResponseDTO[] butacas = restTemplate.getForObject(
+            url("/api/funciones/" + funcion.id() + "/butacas-disponibles"),
+            ButacaResponseDTO[].class
+        );
+        CompraRequestDTO reserva = new CompraRequestDTO(
+            cliente.id(),
+            funcion.id(),
+            List.of(butacas[3].id()),
+            List.of(new EntradaSolicitadaDTO(TipoEntrada.JUBILADO, 1)),
+            null
+        );
+        CompraResponseDTO compra = restTemplate.postForEntity(url("/api/compras"), reserva, CompraResponseDTO.class).getBody();
+        assertThat(compra).isNotNull();
+
+        PagoRequestDTO pago = new PagoRequestDTO(MetodoPago.TARJETA_CREDITO, "Visa", "1111", false);
+        ResponseEntity<ErrorResponseDTO> response = restTemplate.postForEntity(
+            url("/api/compras/" + compra.id() + "/pagos"),
+            pago,
+            ErrorResponseDTO.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().detalles()).anyMatch(detalle -> detalle.startsWith("aceptaTerminos"));
+        CompraResponseDTO sinPagar = restTemplate.getForObject(url("/api/compras/" + compra.id()), CompraResponseDTO.class);
+        assertThat(sinPagar.estado()).isEqualTo(EstadoCompra.PENDIENTE_PAGO);
     }
 
     @Test

@@ -14,13 +14,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class PagoService {
+
+    public static final String ULTIMOS4_TARJETA_RECHAZADA = "0002";
 
     private final PagoRepository pagoRepository;
     private final CompraService compraService;
@@ -39,8 +40,10 @@ public class PagoService {
         pago.setCompra(compra);
         pago.setMonto(compra.getTotal());
         pago.setMetodoPago(dto.metodoPago());
+        pago.setMarcaTarjeta(dto.marca());
+        pago.setUltimos4(dto.ultimos4());
 
-        if (debeRechazarse(dto.datosPagoToken())) {
+        if (ULTIMOS4_TARJETA_RECHAZADA.equals(dto.ultimos4())) {
             pago.rechazar();
         } else {
             pago.confirmar("TX-" + UUID.randomUUID());
@@ -59,9 +62,5 @@ public class PagoService {
         Pago pago = pagoRepository.findById(id)
             .orElseThrow(() -> new RecursoNoEncontradoException("Pago no encontrado con id " + id));
         return DtoMapper.toPagoResponse(pago);
-    }
-
-    private boolean debeRechazarse(String token) {
-        return token != null && token.toLowerCase(Locale.ROOT).contains("rechazar");
     }
 }
