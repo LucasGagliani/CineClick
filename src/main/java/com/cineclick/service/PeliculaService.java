@@ -1,24 +1,37 @@
 package com.cineclick.service;
 
 import com.cineclick.dto.DtoMapper;
+import com.cineclick.dto.PeliculaDestacadaDTO;
 import com.cineclick.dto.PeliculaRequestDTO;
 import com.cineclick.dto.PeliculaResponseDTO;
 import com.cineclick.exception.RecursoNoEncontradoException;
 import com.cineclick.exception.ReglaNegocioException;
+import com.cineclick.model.CategoriaDestacada;
+import com.cineclick.model.EstadoFuncion;
 import com.cineclick.model.Genero;
 import com.cineclick.model.Pelicula;
+import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.PeliculaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class PeliculaService {
 
+    private static final int MAXIMO_DESTACADAS = 8;
+    private static final int DIAS_NOVEDAD = 7;
+
     private final PeliculaRepository peliculaRepository;
+    private final FuncionRepository funcionRepository;
 
     @Transactional(readOnly = true)
     public List<PeliculaResponseDTO> listar(Genero genero) {
@@ -26,6 +39,56 @@ public class PeliculaService {
             ? peliculaRepository.findByActivaTrue()
             : peliculaRepository.findByGeneroAndActivaTrue(genero);
         return peliculas.stream().map(DtoMapper::toPeliculaResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PeliculaDestacadaDTO> listarDestacadas() {
+        return conCategoria().stream()
+            .sorted(Comparator.comparing(PeliculaDestacadaDTO::categoria).thenComparingLong(destacada -> {
+                long dia = destacada.pelicula().fechaEstreno().toEpochDay();
+                return destacada.categoria() == CategoriaDestacada.NOVEDAD ? -dia : dia;
+            }))
+            .limit(MAXIMO_DESTACADAS)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PeliculaDestacadaDTO> listarProximosEstrenos() {
+        return conCategoria().stream()
+            .filter(destacada -> destacada.categoria() != CategoriaDestacada.NOVEDAD)
+            .sorted(Comparator.comparing((PeliculaDestacadaDTO destacada) -> destacada.pelicula().fechaEstreno())
+                .thenComparing(destacada -> destacada.pelicula().titulo()))
+            .toList();
+    }
+
+    public CategoriaDestacada categoriaDe(Pelicula pelicula) {
+        boolean aLaVenta = funcionRepository.existsByPeliculaIdAndEstadoAndFechaHoraInicioAfter(
+            pelicula.getId(), EstadoFuncion.PROGRAMADA, LocalDateTime.now()
+        );
+        return categoria(pelicula, LocalDate.now(), aLaVenta);
+    }
+
+    private List<PeliculaDestacadaDTO> conCategoria() {
+        LocalDate hoy = LocalDate.now();
+        Set<Long> aLaVenta = funcionRepository.peliculasConFuncionesAVenta(LocalDateTime.now());
+        return peliculaRepository.findByActivaTrue().stream()
+            .map(pelicula -> {
+                CategoriaDestacada categoria = categoria(pelicula, hoy, aLaVenta.contains(pelicula.getId()));
+                return categoria == null ? null : new PeliculaDestacadaDTO(DtoMapper.toPeliculaResponse(pelicula), categoria);
+            })
+            .filter(Objects::nonNull)
+            .toList();
+    }
+
+    private static CategoriaDestacada categoria(Pelicula pelicula, LocalDate hoy, boolean aLaVenta) {
+        LocalDate estreno = pelicula.getFechaEstreno();
+        if (estreno == null) {
+            return null;
+        }
+        if (estreno.isAfter(hoy)) {
+            return aLaVenta ? CategoriaDestacada.PREVENTA : CategoriaDestacada.PROXIMAMENTE;
+        }
+        return estreno.isAfter(hoy.minusDays(DIAS_NOVEDAD)) ? CategoriaDestacada.NOVEDAD : null;
     }
 
     @Transactional(readOnly = true)

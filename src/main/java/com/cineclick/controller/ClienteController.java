@@ -3,8 +3,10 @@ package com.cineclick.controller;
 import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
 import com.cineclick.dto.CompraResponseDTO;
+import com.cineclick.dto.ListaEsperaResponseDTO;
 import com.cineclick.service.ClienteService;
 import com.cineclick.service.CompraService;
+import com.cineclick.service.ListaEsperaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,7 @@ public class ClienteController {
 
     private final ClienteService clienteService;
     private final CompraService compraService;
+    private final ListaEsperaService listaEsperaService;
 
     @GetMapping
     public List<ClienteResponseDTO> listar() {
@@ -60,5 +63,10 @@ public class ClienteController {
     @GetMapping("/{id}/compras")
     public List<CompraResponseDTO> listarCompras(@PathVariable Long id) {
         return compraService.listarPorCliente(id);
+    }
+
+    @GetMapping("/{id}/lista-espera")
+    public List<ListaEsperaResponseDTO> listarListaEspera(@PathVariable Long id) {
+        return listaEsperaService.listarPorCliente(id);
     }
 }

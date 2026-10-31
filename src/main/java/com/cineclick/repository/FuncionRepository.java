@@ -1,5 +1,6 @@
 package com.cineclick.repository;
 
+import com.cineclick.model.EstadoFuncion;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.model.Funcion;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,11 +9,17 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 public interface FuncionRepository extends JpaRepository<Funcion, Long> {
     List<Funcion> findByPeliculaId(Long peliculaId);
 
     List<Funcion> findBySalaId(Long salaId);
+
+    boolean existsByPeliculaIdAndEstadoAndFechaHoraInicioAfter(Long peliculaId, EstadoFuncion estado, LocalDateTime desde);
+
+    @Query("select distinct f.pelicula.id from Funcion f where f.estado = com.cineclick.model.EstadoFuncion.PROGRAMADA and f.fechaHoraInicio > :desde")
+    Set<Long> peliculasConFuncionesAVenta(@Param("desde") LocalDateTime desde);
 
     List<Funcion> findByFechaHoraInicioBetween(LocalDateTime desde, LocalDateTime hasta);
 

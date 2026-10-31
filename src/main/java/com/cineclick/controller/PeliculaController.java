@@ -1,8 +1,12 @@
 package com.cineclick.controller;
 
+import com.cineclick.dto.ListaEsperaRequestDTO;
+import com.cineclick.dto.ListaEsperaResponseDTO;
+import com.cineclick.dto.PeliculaDestacadaDTO;
 import com.cineclick.dto.PeliculaRequestDTO;
 import com.cineclick.dto.PeliculaResponseDTO;
 import com.cineclick.model.Genero;
+import com.cineclick.service.ListaEsperaService;
 import com.cineclick.service.PeliculaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,10 +32,33 @@ import java.util.List;
 public class PeliculaController {
 
     private final PeliculaService peliculaService;
+    private final ListaEsperaService listaEsperaService;
 
     @GetMapping
     public List<PeliculaResponseDTO> listar(@RequestParam(required = false) Genero genero) {
         return peliculaService.listar(genero);
+    }
+
+    @GetMapping("/destacadas")
+    public List<PeliculaDestacadaDTO> listarDestacadas() {
+        return peliculaService.listarDestacadas();
+    }
+
+    @GetMapping("/proximos-estrenos")
+    public List<PeliculaDestacadaDTO> listarProximosEstrenos() {
+        return peliculaService.listarProximosEstrenos();
+    }
+
+    @PostMapping("/{id}/lista-espera")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ListaEsperaResponseDTO anotarEnListaEspera(@PathVariable Long id, @Valid @RequestBody ListaEsperaRequestDTO dto) {
+        return listaEsperaService.anotar(id, dto.clienteId());
+    }
+
+    @DeleteMapping("/{id}/lista-espera/{clienteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void quitarDeListaEspera(@PathVariable Long id, @PathVariable Long clienteId) {
+        listaEsperaService.quitar(id, clienteId);
     }
 
     @GetMapping("/{id}")
