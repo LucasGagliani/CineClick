@@ -61,6 +61,9 @@ public class Pelicula {
     @Column(nullable = false)
     private boolean activa = true;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean destacada = false;
+
     public boolean estaDisponible() {
         return activa;
     }

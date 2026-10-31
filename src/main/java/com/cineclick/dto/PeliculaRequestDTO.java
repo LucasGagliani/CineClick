@@ -20,6 +20,11 @@ public record PeliculaRequestDTO(
     @NotBlank @Size(max = 40) String idioma,
     @NotEmpty Set<FormatoFuncion> formatosDisponibles,
     @Size(max = 500) String urlPoster,
-    LocalDate fechaEstreno
+    LocalDate fechaEstreno,
+    Boolean destacada
 ) {
+    public PeliculaRequestDTO(String titulo, String sinopsis, Integer duracionMinutos, String clasificacion, Genero genero,
+                              String idioma, Set<FormatoFuncion> formatosDisponibles, String urlPoster, LocalDate fechaEstreno) {
+        this(titulo, sinopsis, duracionMinutos, clasificacion, genero, idioma, formatosDisponibles, urlPoster, fechaEstreno, null);
+    }
 }

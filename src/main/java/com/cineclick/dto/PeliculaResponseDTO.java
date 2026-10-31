@@ -17,6 +17,7 @@ public record PeliculaResponseDTO(
     Set<FormatoFuncion> formatosDisponibles,
     String urlPoster,
     LocalDate fechaEstreno,
-    boolean activa
+    boolean activa,
+    boolean destacada
 ) {
 }

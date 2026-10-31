@@ -81,5 +81,8 @@ public class PeliculaService {
         pelicula.setFormatosDisponibles(dto.formatosDisponibles());
         pelicula.setUrlPoster(dto.urlPoster());
         pelicula.setFechaEstreno(dto.fechaEstreno());
+        if (dto.destacada() != null) {
+            pelicula.setDestacada(dto.destacada());
+        }
     }
 }

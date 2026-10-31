@@ -31,7 +31,8 @@ public final class DtoMapper {
             Set.copyOf(pelicula.getFormatosDisponibles()),
             pelicula.getUrlPoster(),
             pelicula.getFechaEstreno(),
-            pelicula.isActiva()
+            pelicula.isActiva(),
+            pelicula.isDestacada()
         );
     }
 
