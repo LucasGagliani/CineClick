@@ -113,6 +113,15 @@ public class CompraService {
         return DtoMapper.toCompraResponse(compraRepository.save(compra));
     }
 
+    @Transactional
+    public CompraResponseDTO aplicarPromocion(Long id, String codigo) {
+        Compra compra = buscarEntidad(id);
+        verificarReservaActiva(compra);
+        compra.setPromocion(promocionService.validarPromocionParaCompra(codigo));
+        compra.calcularTotal();
+        return DtoMapper.toCompraResponse(compra);
+    }
+
     @Transactional(readOnly = true)
     public Compra buscarEntidad(Long id) {
         return compraRepository.findById(id)

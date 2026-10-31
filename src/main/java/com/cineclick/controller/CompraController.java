@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.dto.AplicarPromocionRequestDTO;
 import com.cineclick.dto.CompraRequestDTO;
 import com.cineclick.dto.CompraResponseDTO;
 import com.cineclick.service.CompraService;
@@ -38,5 +39,10 @@ public class CompraController {
     @PatchMapping("/{id}/cancelar")
     public CompraResponseDTO cancelar(@PathVariable Long id) {
         return compraService.cancelar(id);
+    }
+
+    @PostMapping("/{id}/promocion")
+    public CompraResponseDTO aplicarPromocion(@PathVariable Long id, @Valid @RequestBody AplicarPromocionRequestDTO dto) {
+        return compraService.aplicarPromocion(id, dto.codigo());
     }
 }
