@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +29,8 @@ import java.util.List;
 @Entity
 @Table(name = "compras")
 public class Compra {
+
+    public static final int MINUTOS_RESERVA = 8;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -80,6 +83,18 @@ public class Compra {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         total = promocion == null ? subtotal : promocion.calcularDescuento(subtotal);
         return total;
+    }
+
+    public LocalDateTime expiraEn() {
+        return fechaCompra.plusMinutes(MINUTOS_RESERVA);
+    }
+
+    public boolean estaReservaActiva(LocalDateTime ahora) {
+        return estado == EstadoCompra.PENDIENTE_PAGO && ahora.isBefore(expiraEn());
+    }
+
+    public long segundosRestantes(LocalDateTime ahora) {
+        return Math.max(0, Duration.between(ahora, expiraEn()).getSeconds());
     }
 
     public void confirmar() {

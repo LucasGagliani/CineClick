@@ -6,6 +6,7 @@ import com.cineclick.dto.DtoMapper;
 import com.cineclick.exception.ButacaNoDisponibleException;
 import com.cineclick.exception.RecursoNoEncontradoException;
 import com.cineclick.exception.ReglaNegocioException;
+import com.cineclick.exception.ReservaNoActivaException;
 import com.cineclick.model.Butaca;
 import com.cineclick.model.Cliente;
 import com.cineclick.model.Compra;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -38,6 +40,7 @@ public class CompraService {
     private final ClienteService clienteService;
     private final FuncionService funcionService;
     private final PromocionService promocionService;
+    private final VencimientoReservaService vencimientoReservaService;
 
     @Transactional
     public CompraResponseDTO crearCompra(CompraRequestDTO dto) {
@@ -47,6 +50,7 @@ public class CompraService {
         if (!funcion.estaDisponibleParaVenta()) {
             throw new ReglaNegocioException("La funcion no esta disponible para la venta");
         }
+        vencimientoReservaService.cancelarVencidas(funcion.getId());
 
         List<Butaca> butacas = butacaRepository.findAllById(dto.butacasIds());
         validarButacasDisponibles(funcion, butacas, dto.butacasIds());
@@ -101,6 +105,12 @@ public class CompraService {
     public Compra buscarEntidad(Long id) {
         return compraRepository.findById(id)
             .orElseThrow(() -> new RecursoNoEncontradoException("Compra no encontrada con id " + id));
+    }
+
+    public void verificarReservaActiva(Compra compra) {
+        if (!compra.estaReservaActiva(LocalDateTime.now())) {
+            throw new ReservaNoActivaException("La reserva vencio o ya no esta activa");
+        }
     }
 
     public void validarButacasDisponibles(Funcion funcion, List<Butaca> butacas, List<Long> idsSolicitados) {

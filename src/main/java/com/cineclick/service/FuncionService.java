@@ -41,6 +41,7 @@ public class FuncionService {
     private final SalaRepository salaRepository;
     private final ButacaRepository butacaRepository;
     private final EntradaRepository entradaRepository;
+    private final VencimientoReservaService vencimientoReservaService;
 
     @Transactional(readOnly = true)
     public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, String ciudad, LocalDate fecha, FormatoFuncion formato) {
@@ -78,9 +79,10 @@ public class FuncionService {
         funcionRepository.save(funcion);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ButacaResponseDTO> obtenerButacasDisponibles(Long funcionId) {
         Funcion funcion = buscarEntidad(funcionId);
+        vencimientoReservaService.cancelarVencidas(funcionId);
         Set<Long> butacasOcupadas = entradaRepository.findByFuncionId(funcionId).stream()
             .filter(entrada -> entrada.getEstado() != EstadoEntrada.CANCELADA)
             .map(entrada -> entrada.getButaca().getId())

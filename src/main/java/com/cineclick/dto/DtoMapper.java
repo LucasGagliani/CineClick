@@ -5,12 +5,14 @@ import com.cineclick.model.Cine;
 import com.cineclick.model.Cliente;
 import com.cineclick.model.Compra;
 import com.cineclick.model.Entrada;
+import com.cineclick.model.EstadoCompra;
 import com.cineclick.model.Funcion;
 import com.cineclick.model.Pago;
 import com.cineclick.model.Pelicula;
 import com.cineclick.model.Promocion;
 import com.cineclick.model.Sala;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Set;
 
@@ -107,6 +109,8 @@ public final class DtoMapper {
     }
 
     public static CompraResponseDTO toCompraResponse(Compra compra) {
+        boolean pendiente = compra.getEstado() == EstadoCompra.PENDIENTE_PAGO;
+        LocalDateTime ahora = LocalDateTime.now();
         return new CompraResponseDTO(
             compra.getId(),
             compra.getCliente().getId(),
@@ -117,7 +121,9 @@ public final class DtoMapper {
             compra.getTotal(),
             compra.getEstado(),
             compra.getEntradas().stream().map(DtoMapper::toEntradaResponse).toList(),
-            compra.getPago() == null ? null : toPagoResponse(compra.getPago())
+            compra.getPago() == null ? null : toPagoResponse(compra.getPago()),
+            pendiente ? compra.expiraEn() : null,
+            pendiente ? compra.segundosRestantes(ahora) : null
         );
     }
 

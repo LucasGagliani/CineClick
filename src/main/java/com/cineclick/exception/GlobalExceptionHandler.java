@@ -31,6 +31,11 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), List.of());
     }
 
+    @ExceptionHandler(ReservaNoActivaException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarReservaNoActiva(ReservaNoActivaException ex, HttpServletRequest request) {
+        return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), List.of());
+    }
+
     @ExceptionHandler(RecursoDuplicadoException.class)
     public ResponseEntity<ErrorResponseDTO> manejarDuplicado(RecursoDuplicadoException ex, HttpServletRequest request) {
         return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), List.of());

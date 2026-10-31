@@ -16,6 +16,8 @@ public record CompraResponseDTO(
     BigDecimal total,
     EstadoCompra estado,
     List<EntradaResponseDTO> entradas,
-    PagoResponseDTO pago
+    PagoResponseDTO pago,
+    LocalDateTime expiraEn,
+    Long segundosRestantes
 ) {
 }
