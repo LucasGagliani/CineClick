@@ -20,6 +20,8 @@ public interface EntradaRepository extends JpaRepository<Entrada, Long> {
 
     boolean existsByCodigoQr(String codigoQr);
 
+    boolean existsByButacaSalaId(Long salaId);
+
     Optional<Entrada> findByCodigoQrIgnoreCase(String codigoQr);
 
     @Query("select e.funcion.id, count(e) from Entrada e where e.vigente = true and e.funcion.id in :funcionIds group by e.funcion.id")

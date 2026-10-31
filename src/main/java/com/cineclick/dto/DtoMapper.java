@@ -71,6 +71,7 @@ public final class DtoMapper {
             butaca.getId(),
             butaca.getFila(),
             butaca.getNumero(),
+            butaca.getColumna() == null ? butaca.getNumero() : butaca.getColumna(),
             butaca.codigo(),
             butaca.getTipo(),
             disponible

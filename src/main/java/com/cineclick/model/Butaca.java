@@ -34,6 +34,9 @@ public class Butaca {
     @Column(nullable = false)
     private Integer numero;
 
+    @Column
+    private Integer columna;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TipoButaca tipo = TipoButaca.NORMAL;

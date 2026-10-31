@@ -1,22 +1,24 @@
 package com.cineclick.config;
 
-import com.cineclick.model.Butaca;
 import com.cineclick.model.Cine;
 import com.cineclick.model.EstadoFuncion;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.model.Funcion;
 import com.cineclick.model.Genero;
 import com.cineclick.model.Pelicula;
+import com.cineclick.model.PlanoSala;
 import com.cineclick.model.Promocion;
 import com.cineclick.model.RolUsuario;
 import com.cineclick.model.Sala;
-import com.cineclick.model.TipoButaca;
 import com.cineclick.model.TipoSala;
 import com.cineclick.model.Usuario;
+import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.CineRepository;
+import com.cineclick.repository.EntradaRepository;
 import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.PeliculaRepository;
 import com.cineclick.repository.PromocionRepository;
+import com.cineclick.repository.SalaRepository;
 import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
@@ -40,6 +42,9 @@ public class DataSeeder implements ApplicationRunner {
     private final CineRepository cineRepository;
     private final FuncionRepository funcionRepository;
     private final PromocionRepository promocionRepository;
+    private final SalaRepository salaRepository;
+    private final ButacaRepository butacaRepository;
+    private final EntradaRepository entradaRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
@@ -52,6 +57,18 @@ public class DataSeeder implements ApplicationRunner {
         }
         if (promocionRepository.count() == 0) {
             crearPromocionesDemo();
+        }
+        redistribuirSalasSinPlano();
+    }
+
+    private void redistribuirSalasSinPlano() {
+        for (Sala sala : salaRepository.findAll()) {
+            if (butacaRepository.existsBySalaIdAndColumnaIsNotNull(sala.getId())
+                || entradaRepository.existsByButacaSalaId(sala.getId())) {
+                continue;
+            }
+            butacaRepository.borrarPorSala(sala.getId());
+            butacaRepository.saveAll(PlanoSala.sugeridoPara(sala).crearButacas(sala));
         }
     }
 
@@ -101,8 +118,8 @@ public class DataSeeder implements ApplicationRunner {
         cine.setCiudad("Buenos Aires");
         cine.setTelefono("011-4000-1000");
 
-        Sala sala1 = nuevaSala("Sala 1", 1, TipoSala.TRADICIONAL, 5, 8);
-        Sala sala2 = nuevaSala("Sala IMAX", 2, TipoSala.IMAX, 4, 7);
+        Sala sala1 = nuevaSala("Sala 1", 1, TipoSala.TRADICIONAL, PlanoSala.CLASICA);
+        Sala sala2 = nuevaSala("Sala IMAX", 2, TipoSala.IMAX, PlanoSala.IMAX);
         cine.agregarSala(sala1);
         cine.agregarSala(sala2);
         cineRepository.save(cine);
@@ -135,20 +152,12 @@ public class DataSeeder implements ApplicationRunner {
         return pelicula;
     }
 
-    private Sala nuevaSala(String nombre, Integer numero, TipoSala tipo, int filas, int butacasPorFila) {
+    private Sala nuevaSala(String nombre, Integer numero, TipoSala tipo, PlanoSala plano) {
         Sala sala = new Sala();
         sala.setNombre(nombre);
         sala.setNumero(numero);
         sala.setTipo(tipo);
-        for (int fila = 0; fila < filas; fila++) {
-            for (int numeroButaca = 1; numeroButaca <= butacasPorFila; numeroButaca++) {
-                Butaca butaca = new Butaca();
-                butaca.setFila(String.valueOf((char) ('A' + fila)));
-                butaca.setNumero(numeroButaca);
-                butaca.setTipo(numeroButaca <= 2 ? TipoButaca.VIP : TipoButaca.NORMAL);
-                sala.agregarButaca(butaca);
-            }
-        }
+        plano.crearButacas(sala).forEach(sala::agregarButaca);
         return sala;
     }
 

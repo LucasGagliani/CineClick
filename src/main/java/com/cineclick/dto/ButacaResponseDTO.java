@@ -6,6 +6,7 @@ public record ButacaResponseDTO(
     Long id,
     String fila,
     Integer numero,
+    Integer columna,
     String codigo,
     TipoButaca tipo,
     boolean disponible

@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -62,26 +63,36 @@ public class CineService {
 
     @Transactional
     public SalaResponseDTO agregarSala(Long cineId, SalaRequestDTO dto) {
-        if (dto.cantidadFilas() > 26) {
-            throw new ReglaNegocioException("La cantidad de filas no puede superar 26");
-        }
         Cine cine = buscarEntidad(cineId);
         Sala sala = new Sala();
         sala.setNombre(dto.nombre());
         sala.setNumero(dto.numero());
         sala.setTipo(dto.tipo());
+        List<Butaca> butacas = dto.plano() != null ? dto.plano().crearButacas(sala) : butacasUniformes(dto);
+        butacas.forEach(sala::agregarButaca);
+        cine.agregarSala(sala);
+        return DtoMapper.toSalaResponse(salaRepository.save(sala));
+    }
+
+    private List<Butaca> butacasUniformes(SalaRequestDTO dto) {
+        if (dto.cantidadFilas() == null || dto.butacasPorFila() == null) {
+            throw new ReglaNegocioException("Hay que indicar un plano o la cantidad de filas y de butacas por fila");
+        }
+        if (dto.cantidadFilas() > 26) {
+            throw new ReglaNegocioException("La cantidad de filas no puede superar 26");
+        }
+        List<Butaca> butacas = new ArrayList<>();
         for (int fila = 0; fila < dto.cantidadFilas(); fila++) {
             for (int numero = 1; numero <= dto.butacasPorFila(); numero++) {
                 Butaca butaca = new Butaca();
                 butaca.setFila(String.valueOf((char) ('A' + fila)));
                 butaca.setNumero(numero);
-                butaca.setTipo(numero <= 2 ? TipoButaca.VIP : TipoButaca.NORMAL);
-                sala.agregarButaca(butaca);
+                butaca.setColumna(numero);
+                butaca.setTipo(TipoButaca.NORMAL);
+                butacas.add(butaca);
             }
         }
-        cine.agregarSala(sala);
-        cineRepository.save(cine);
-        return DtoMapper.toSalaResponse(sala);
+        return butacas;
     }
 
     @Transactional(readOnly = true)
