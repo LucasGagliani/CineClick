@@ -16,6 +16,8 @@ public interface EntradaRepository extends JpaRepository<Entrada, Long> {
 
     boolean existsByFuncionIdAndButacaIdAndEstadoNot(Long funcionId, Long butacaId, EstadoEntrada estado);
 
+    boolean existsByCodigoQr(String codigoQr);
+
     @Query("select e.funcion.id, count(e) from Entrada e where e.vigente = true and e.funcion.id in :funcionIds group by e.funcion.id")
     List<Object[]> contarVigentesPorFuncion(@Param("funcionIds") Collection<Long> funcionIds);
 

@@ -25,14 +25,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class CompraService {
+
+    private static final String RESTRICCION_BUTACA = "uk_entrada_funcion_butaca_vigente";
+
+    private static final String ALFABETO_CODIGO = "0123456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
+    private static final int LARGO_CODIGO = 8;
 
     private final CompraRepository compraRepository;
     private final EntradaRepository entradaRepository;
@@ -41,6 +48,7 @@ public class CompraService {
     private final FuncionService funcionService;
     private final PromocionService promocionService;
     private final VencimientoReservaService vencimientoReservaService;
+    private final SecureRandom random = new SecureRandom();
 
     @Transactional
     public CompraResponseDTO crearCompra(CompraRequestDTO dto) {
@@ -64,11 +72,12 @@ public class CompraService {
             compra.setPromocion(promocion);
         }
 
+        Set<String> codigosGenerados = new HashSet<>();
         for (Butaca butaca : butacas) {
             Entrada entrada = new Entrada();
             entrada.setButaca(butaca);
             entrada.setPrecioUnitario(calcularPrecioButaca(funcion.getPrecioBase(), butaca));
-            entrada.generarCodigoQr();
+            entrada.setCodigoQr(generarCodigoEntrada(codigosGenerados));
             compra.agregarEntrada(entrada);
         }
         compra.calcularTotal();
@@ -76,7 +85,10 @@ public class CompraService {
         try {
             return DtoMapper.toCompraResponse(compraRepository.saveAndFlush(compra));
         } catch (DataIntegrityViolationException ex) {
-            throw new ButacaNoDisponibleException("Una o mas butacas ya fueron compradas para esta funcion");
+            if (esButacaDuplicada(ex)) {
+                throw new ButacaNoDisponibleException("Una o mas butacas ya fueron compradas para esta funcion");
+            }
+            throw ex;
         }
     }
 
@@ -135,11 +147,29 @@ public class CompraService {
         }
     }
 
+    private static boolean esButacaDuplicada(DataIntegrityViolationException ex) {
+        String mensaje = ex.getMostSpecificCause().getMessage();
+        return mensaje != null && mensaje.toLowerCase(Locale.ROOT).contains(RESTRICCION_BUTACA);
+    }
+
     private void validarButacasSinDuplicados(List<Long> butacasIds) {
         Set<Long> idsUnicos = new HashSet<>(butacasIds);
         if (idsUnicos.size() != butacasIds.size()) {
             throw new ReglaNegocioException("No se puede seleccionar dos veces la misma butaca");
         }
+    }
+
+    private String generarCodigoEntrada(Set<String> codigosGenerados) {
+        String codigo;
+        do {
+            StringBuilder sb = new StringBuilder(LARGO_CODIGO);
+            for (int i = 0; i < LARGO_CODIGO; i++) {
+                sb.append(ALFABETO_CODIGO.charAt(random.nextInt(ALFABETO_CODIGO.length())));
+            }
+            codigo = sb.toString();
+        } while (codigosGenerados.contains(codigo) || entradaRepository.existsByCodigoQr(codigo));
+        codigosGenerados.add(codigo);
+        return codigo;
     }
 
     private BigDecimal calcularPrecioButaca(BigDecimal precioBase, Butaca butaca) {

@@ -16,7 +16,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 
 @Getter
 @Setter
@@ -44,8 +43,6 @@ public class Entrada {
     @Column(nullable = false)
     private EstadoEntrada estado = EstadoEntrada.EMITIDA;
 
-    // TRUE si la entrada esta activa, NULL si se cancelo.
-    // El unique no compara NULLs, asi una entrada cancelada no bloquea la butaca.
     @Column
     private Boolean vigente = Boolean.TRUE;
 
@@ -60,12 +57,6 @@ public class Entrada {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "butaca_id", nullable = false)
     private Butaca butaca;
-
-    public void generarCodigoQr() {
-        if (codigoQr == null || codigoQr.isBlank()) {
-            codigoQr = "CINECLICK-" + UUID.randomUUID();
-        }
-    }
 
     public void marcarUsada() {
         estado = EstadoEntrada.USADA;
