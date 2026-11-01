@@ -54,19 +54,27 @@ En `documentacion/` están los diagramas UML y `explicacion-del-proyecto.md`, do
 | Recurso | Endpoints |
 | --- | --- |
 | Auth | `POST /api/auth/login` |
-| Películas | `GET`, `POST /api/peliculas` · `GET`, `PUT`, `DELETE /api/peliculas/{id}` · `GET /api/peliculas/destacadas` · `GET /api/peliculas/proximos-estrenos` |
+| Películas | `GET`, `POST /api/peliculas` · `GET`, `PUT`, `DELETE /api/peliculas/{id}` · `PATCH /api/peliculas/{id}/estado` · `GET /api/peliculas/destacadas` · `GET /api/peliculas/proximos-estrenos` |
 | Lista de espera | `POST /api/peliculas/{id}/lista-espera` · `DELETE /api/peliculas/{id}/lista-espera/{clienteId}` · `GET /api/clientes/{id}/lista-espera` |
-| Cines | `GET`, `POST /api/cines` · `GET`, `PUT`, `DELETE /api/cines/{id}` · `GET`, `POST /api/cines/{id}/salas` |
-| Funciones | `GET`, `POST /api/funciones` · `GET`, `PUT`, `DELETE /api/funciones/{id}` · `GET /api/funciones/{id}/butacas-disponibles` · `GET /api/funciones/{id}/precios` |
+| Cines | `GET`, `POST /api/cines` · `GET`, `PUT`, `DELETE /api/cines/{id}` · `PATCH /api/cines/{id}/estado` · `GET`, `POST /api/cines/{id}/salas` |
+| Salas | `GET /api/salas` · `PUT`, `DELETE /api/salas/{id}` · `PATCH /api/salas/{id}/estado` |
+| Funciones | `GET`, `POST /api/funciones` · `GET`, `PUT`, `DELETE /api/funciones/{id}` · `PATCH /api/funciones/{id}/cancelar` · `GET /api/funciones/{id}/butacas-disponibles` · `GET /api/funciones/{id}/precios` |
 | Clientes | `GET`, `POST /api/clientes` · `GET`, `PUT`, `DELETE /api/clientes/{id}` · `GET /api/clientes/{id}/compras` |
 | Compras | `POST /api/compras` · `GET /api/compras/{id}` · `PATCH /api/compras/{id}/cancelar` · `POST /api/compras/{id}/promocion` |
 | Entradas | `POST /api/entradas/{codigo}/validar` |
+| Métricas | `GET /api/admin/metricas?desde=&hasta=&cineId=` (solo administradores: encabezado `X-Usuario-Id`) |
 | Pagos | `POST /api/compras/{id}/pagos` · `GET /api/pagos/{id}` |
-| Promociones | `GET`, `POST /api/promociones` |
+| Promociones | `GET`, `POST /api/promociones` · `GET /api/promociones/vigentes` · `PUT`, `DELETE /api/promociones/{id}` · `PATCH /api/promociones/{id}/estado` |
 
-`GET /api/funciones` acepta los filtros `peliculaId`, `cineId`, `ciudad`, `fecha` (`2026-09-25`) y `formato` (`IMAX`).
+`GET /api/funciones` acepta los filtros `peliculaId`, `cineId`, `fecha` (`2026-09-25`) y `formato` (`IMAX`). Por defecto no devuelve funciones de cines inactivos; el panel pide todo con `incluirInactivos=true` (lo mismo `GET /api/cines?incluirInactivos=true` y `GET /api/peliculas?incluirInactivas=true`).
 
-Los `DELETE` son bajas lógicas: el registro queda marcado como inactivo en vez de borrarse, porque hay compras que lo referencian.
+Los `DELETE` de cines, salas, películas, funciones y promociones borran el registro solo si no tiene datos asociados. Si los tiene, responden `409` con lo que tiene asociado en `detalles` (por ejemplo `["salas", "funciones", "compras"]`) y lo que corresponde es desactivarlo con `PATCH .../estado` (`{"activo": false}`) o, en una función, cancelarla. Un cine inactivo no aparece en el sitio, pero sus compras siguen visibles.
+
+Los conjuntos cerrados son enums: provincia (las 24 jurisdicciones, con `CABA` aparte de `BUENOS_AIRES`), calificación (`ATP`, `MAS_13`, `MAS_16`, `MAS_18`), idioma (`CASTELLANO`, `SUBTITULADA`), género, formato y tipo de sala. Los textos se guardan sin espacios de más; los nombres de cine y las localidades en formato título; el teléfono con sus 10 dígitos. En CABA la localidad tiene que ser uno de los 48 barrios. El margen de limpieza entre funciones de una sala se configura con `cineclick.funciones.minutos-limpieza` (20 por defecto).
+
+`GET /api/admin/metricas` junta en un solo JSON todos los bloques del panel (resumen contra el período anterior, próximas funciones, ranking, conversión, por cine, franjas, promociones, tipos de entrada y asistencia). Sale de consultas de agregación, sin recorrer compras una por una. Las definiciones de cada métrica están comentadas en `MetricasService`: una venta es una compra confirmada; ingresos y entradas van por fecha de compra; la ocupación, por fecha de función y ponderada por capacidad. Sin `X-Usuario-Id` de un administrador responde 403. La aplicación arranca con la zona horaria `America/Argentina/Buenos_Aires`.
+
+Al arrancar, `MigracionDatos` pasa los datos viejos al formato nuevo (dirección y ciudad del cine a provincia, localidad, calle y altura; calificación e idioma de texto libre a los enums) y deja en el log cómo quedó cada registro.
 
 En `requests/cineclick-demo.http` están todos los requests con sus bodies listos para probar desde IntelliJ o VS Code (con la extensión REST Client). Incluyen casos que salen bien y casos con error. El pago es simulado: se mandan solo la marca y los últimos 4 dígitos de la tarjeta (`"ultimos4": "0002"` simula un rechazo) y `"aceptaTerminos": true`. Una compra se reserva por 8 minutos; si no se paga en ese tiempo se cancela sola.
 
