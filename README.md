@@ -16,9 +16,14 @@ En Windows con CMD es `mvnw.cmd spring-boot:run`. También se puede correr `Cine
 
 La API queda en `http://localhost:8080`.
 
-La primera vez que arranca, se cargan datos de prueba: un admin, 2 películas, un cine con 2 salas, 3 funciones y la promo `ESTRENO10`. Las funciones quedan para el día siguiente, así que si pasan unos días conviene borrar la carpeta `data/` y volver a arrancar.
+La primera vez que arranca con la base vacía se carga el catálogo de prueba (`config/CatalogoDemo`): 3 cines con 6 salas de distinto plano (clásica, estadio, IMAX, premium y 4D), películas reales en cartelera, próximos estrenos (algunos en preventa), la promo `ESTRENO10` y la programación de los próximos 7 días a partir de la fecha del día.
 
-**Usuario admin:** `admin@cineclick.com` / `admin123`
+Si en la base no queda ninguna función a futuro (por ejemplo, porque pasaron varios días), al arrancar se vuelve a programar una semana con las películas y salas que haya. Para empezar de cero con el catálogo completo, borrá la carpeta `data/` y volvé a arrancar.
+
+| Usuario | Email | Contraseña |
+| --- | --- | --- |
+| Admin | `admin@cineclick.com` | `admin123` |
+| Cliente | `cliente@cineclick.com` | `cliente123` |
 
 ### Base de datos
 
@@ -49,11 +54,13 @@ En `documentacion/` están los diagramas UML y `explicacion-del-proyecto.md`, do
 | Recurso | Endpoints |
 | --- | --- |
 | Auth | `POST /api/auth/login` |
-| Películas | `GET`, `POST /api/peliculas` · `GET`, `PUT`, `DELETE /api/peliculas/{id}` |
+| Películas | `GET`, `POST /api/peliculas` · `GET`, `PUT`, `DELETE /api/peliculas/{id}` · `GET /api/peliculas/destacadas` · `GET /api/peliculas/proximos-estrenos` |
+| Lista de espera | `POST /api/peliculas/{id}/lista-espera` · `DELETE /api/peliculas/{id}/lista-espera/{clienteId}` · `GET /api/clientes/{id}/lista-espera` |
 | Cines | `GET`, `POST /api/cines` · `GET`, `PUT`, `DELETE /api/cines/{id}` · `GET`, `POST /api/cines/{id}/salas` |
-| Funciones | `GET`, `POST /api/funciones` · `GET`, `PUT`, `DELETE /api/funciones/{id}` · `GET /api/funciones/{id}/butacas-disponibles` |
+| Funciones | `GET`, `POST /api/funciones` · `GET`, `PUT`, `DELETE /api/funciones/{id}` · `GET /api/funciones/{id}/butacas-disponibles` · `GET /api/funciones/{id}/precios` |
 | Clientes | `GET`, `POST /api/clientes` · `GET`, `PUT`, `DELETE /api/clientes/{id}` · `GET /api/clientes/{id}/compras` |
-| Compras | `POST /api/compras` · `GET /api/compras/{id}` · `PATCH /api/compras/{id}/cancelar` |
+| Compras | `POST /api/compras` · `GET /api/compras/{id}` · `PATCH /api/compras/{id}/cancelar` · `POST /api/compras/{id}/promocion` |
+| Entradas | `POST /api/entradas/{codigo}/validar` |
 | Pagos | `POST /api/compras/{id}/pagos` · `GET /api/pagos/{id}` |
 | Promociones | `GET`, `POST /api/promociones` |
 
@@ -61,7 +68,7 @@ En `documentacion/` están los diagramas UML y `explicacion-del-proyecto.md`, do
 
 Los `DELETE` son bajas lógicas: el registro queda marcado como inactivo en vez de borrarse, porque hay compras que lo referencian.
 
-En `requests/cineclick-demo.http` están todos los requests con sus bodies listos para probar desde IntelliJ o VS Code (con la extensión REST Client). Incluyen casos que salen bien y casos con error. Para simular un pago rechazado se manda `"datosPagoToken": "rechazar"`.
+En `requests/cineclick-demo.http` están todos los requests con sus bodies listos para probar desde IntelliJ o VS Code (con la extensión REST Client). Incluyen casos que salen bien y casos con error. El pago es simulado: se mandan solo la marca y los últimos 4 dígitos de la tarjeta (`"ultimos4": "0002"` simula un rechazo) y `"aceptaTerminos": true`. Una compra se reserva por 8 minutos; si no se paga en ese tiempo se cancela sola.
 
 ## Errores
 

@@ -115,10 +115,13 @@ Content-Type: application/json
 ### Ver funciones (se pueden filtrar: ?peliculaId=2&fecha=2026-09-25&formato=DOS_D)
 GET http://localhost:8080/api/funciones
 
-### Butacas de la funcion 2 (Intensamente 2, Sala 1)
+### Butacas de la funcion 2 (los ids dependen de la programacion del dia)
 GET http://localhost:8080/api/funciones/2/butacas-disponibles
 
-### Comprar las butacas A1 y A2 con la promo (queda como compra 1)
+### Precios por tipo de entrada de la funcion 2
+GET http://localhost:8080/api/funciones/2/precios
+
+### Reservar dos butacas (una general y una de menor) con la promo. Queda como compra 1 y dura 8 minutos
 POST http://localhost:8080/api/compras
 Content-Type: application/json
 
@@ -126,7 +129,19 @@ Content-Type: application/json
   "clienteId": 1,
   "funcionId": 2,
   "butacasIds": [1, 2],
+  "entradas": [{ "tipo": "GENERAL", "cantidad": 1 }, { "tipo": "MENOR", "cantidad": 1 }],
   "codigoPromocion": "ESTRENO10"
+}
+
+### La cantidad de entradas no coincide con las butacas -> 400
+POST http://localhost:8080/api/compras
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "funcionId": 2,
+  "butacasIds": [3, 4],
+  "entradas": [{ "tipo": "GENERAL", "cantidad": 3 }]
 }
 
 ### Intentar comprar otra vez la A1 -> 409, ya esta vendida
@@ -136,7 +151,8 @@ Content-Type: application/json
 {
   "clienteId": 1,
   "funcionId": 2,
-  "butacasIds": [1]
+  "butacasIds": [1],
+  "entradas": [{ "tipo": "GENERAL", "cantidad": 1 }]
 }
 
 ### Pagar la compra 1
@@ -144,8 +160,10 @@ POST http://localhost:8080/api/compras/1/pagos
 Content-Type: application/json
 
 {
-  "metodoPago": "MERCADO_PAGO",
-  "datosPagoToken": "token-demo"
+  "metodoPago": "TARJETA_CREDITO",
+  "marca": "Visa",
+  "ultimos4": "1111",
+  "aceptaTerminos": true
 }
 
 ### Ver la compra (ahora CONFIRMADA)
@@ -161,16 +179,19 @@ Content-Type: application/json
 {
   "clienteId": 1,
   "funcionId": 2,
-  "butacasIds": [1]
+  "butacasIds": [1],
+  "entradas": [{ "tipo": "JUBILADO", "cantidad": 1 }]
 }
 
-### Pago rechazado (cualquier token que contenga "rechazar")
+### Pago rechazado (la tarjeta terminada en 0002 siempre se rechaza; se puede reintentar)
 POST http://localhost:8080/api/compras/2/pagos
 Content-Type: application/json
 
 {
-  "metodoPago": "MERCADO_PAGO",
-  "datosPagoToken": "rechazar"
+  "metodoPago": "TARJETA_CREDITO",
+  "marca": "Visa",
+  "ultimos4": "0002",
+  "aceptaTerminos": true
 }
 
 ### Compras del cliente
