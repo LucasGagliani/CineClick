@@ -3,6 +3,8 @@ package com.cineclick.model;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -27,14 +29,23 @@ public class Cine {
     @Column(nullable = false, length = 120)
     private String nombre;
 
-    @Column(nullable = false, length = 160)
-    private String direccion;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private Provincia provincia;
 
-    @Column(nullable = false, length = 80)
-    private String ciudad;
+    @Column(length = 80)
+    private String localidad;
+
+    @Column(length = 120)
+    private String calle;
+
+    private Integer altura;
 
     @Column(length = 40)
     private String telefono;
+
+    @Column(length = 300)
+    private String urlImagen;
 
     @Column(nullable = false)
     private boolean activo = true;

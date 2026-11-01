@@ -7,4 +7,8 @@ import java.util.List;
 
 public interface SalaRepository extends JpaRepository<Sala, Long> {
     List<Sala> findByCineIdAndActivaTrue(Long cineId);
+
+    List<Sala> findByCineId(Long cineId);
+
+    boolean existsByCineId(Long cineId);
 }

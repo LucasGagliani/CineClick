@@ -46,6 +46,21 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.UNAUTHORIZED, ex.getMessage(), request.getRequestURI(), List.of());
     }
 
+    @ExceptionHandler(RecursoEnUsoException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarEnUso(RecursoEnUsoException ex, HttpServletRequest request) {
+        return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), ex.getAsociados());
+    }
+
+    @ExceptionHandler(CampoInvalidoException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarCampoInvalido(CampoInvalidoException ex, HttpServletRequest request) {
+        return construirRespuesta(
+            HttpStatus.BAD_REQUEST,
+            "Hay datos invalidos",
+            request.getRequestURI(),
+            List.of(ex.getCampo() + ": " + ex.getMessage())
+        );
+    }
+
     @ExceptionHandler(ReglaNegocioException.class)
     public ResponseEntity<ErrorResponseDTO> manejarReglaNegocio(ReglaNegocioException ex, HttpServletRequest request) {
         return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI(), List.of());

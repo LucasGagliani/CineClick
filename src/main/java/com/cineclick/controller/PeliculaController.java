@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.dto.EstadoRequestDTO;
 import com.cineclick.dto.ListaEsperaRequestDTO;
 import com.cineclick.dto.ListaEsperaResponseDTO;
 import com.cineclick.dto.PeliculaDestacadaDTO;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -35,8 +37,11 @@ public class PeliculaController {
     private final ListaEsperaService listaEsperaService;
 
     @GetMapping
-    public List<PeliculaResponseDTO> listar(@RequestParam(required = false) Genero genero) {
-        return peliculaService.listar(genero);
+    public List<PeliculaResponseDTO> listar(
+        @RequestParam(required = false) Genero genero,
+        @RequestParam(defaultValue = "false") boolean incluirInactivas
+    ) {
+        return peliculaService.listar(genero, incluirInactivas);
     }
 
     @GetMapping("/destacadas")
@@ -75,6 +80,11 @@ public class PeliculaController {
     @PutMapping("/{id}")
     public PeliculaResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody PeliculaRequestDTO dto) {
         return peliculaService.actualizar(id, dto);
+    }
+
+    @PatchMapping("/{id}/estado")
+    public PeliculaResponseDTO cambiarEstado(@PathVariable Long id, @Valid @RequestBody EstadoRequestDTO dto) {
+        return peliculaService.cambiarEstado(id, dto.activo());
     }
 
     @DeleteMapping("/{id}")

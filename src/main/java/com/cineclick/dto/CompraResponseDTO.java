@@ -12,6 +12,7 @@ public record CompraResponseDTO(
     String clienteNombre,
     Long funcionId,
     String peliculaTitulo,
+    FuncionCompraDTO funcion,
     LocalDateTime fechaCompra,
     BigDecimal subtotal,
     BigDecimal total,

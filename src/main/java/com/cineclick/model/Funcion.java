@@ -10,8 +10,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,8 +40,9 @@ public class Funcion {
     @Column(nullable = false)
     private FormatoFuncion formato;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
-    private String idioma;
+    private Idioma idioma;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -57,11 +56,9 @@ public class Funcion {
     @JoinColumn(name = "sala_id", nullable = false)
     private Sala sala;
 
-    @PrePersist
-    @PreUpdate
-    public void calcularHorarioFin() {
+    public void calcularHorarioFin(int minutosLimpieza) {
         if (pelicula != null && fechaHoraInicio != null && pelicula.getDuracionMinutos() != null) {
-            fechaHoraFin = fechaHoraInicio.plusMinutes(pelicula.getDuracionMinutos() + 20L);
+            fechaHoraFin = fechaHoraInicio.plusMinutes(pelicula.getDuracionMinutos() + (long) minutosLimpieza);
         }
     }
 

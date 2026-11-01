@@ -5,8 +5,9 @@ import com.cineclick.dto.DtoMapper;
 import com.cineclick.dto.FuncionRequestDTO;
 import com.cineclick.dto.FuncionResponseDTO;
 import com.cineclick.dto.PrecioEntradaDTO;
+import com.cineclick.exception.CampoInvalidoException;
+import com.cineclick.exception.RecursoEnUsoException;
 import com.cineclick.exception.RecursoNoEncontradoException;
-import com.cineclick.exception.ReglaNegocioException;
 import com.cineclick.model.Butaca;
 import com.cineclick.model.Entrada;
 import com.cineclick.model.EstadoEntrada;
@@ -17,16 +18,19 @@ import com.cineclick.model.Pelicula;
 import com.cineclick.model.Sala;
 import com.cineclick.model.TipoEntrada;
 import com.cineclick.repository.ButacaRepository;
+import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.EntradaRepository;
 import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.PeliculaRepository;
 import com.cineclick.repository.SalaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -45,13 +49,16 @@ public class FuncionService {
     private final ButacaRepository butacaRepository;
     private final EntradaRepository entradaRepository;
     private final VencimientoReservaService vencimientoReservaService;
+    private final CompraRepository compraRepository;
+
+    @Value("${cineclick.funciones.minutos-limpieza:20}")
+    private int minutosLimpieza;
 
     @Transactional(readOnly = true)
-    public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, String ciudad, LocalDate fecha, FormatoFuncion formato) {
-        String ciudadFiltro = ciudad == null || ciudad.isBlank() ? null : ciudad;
+    public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, LocalDate fecha, FormatoFuncion formato, boolean incluirInactivos) {
         LocalDateTime desde = fecha == null ? null : fecha.atStartOfDay();
         LocalDateTime hasta = fecha == null ? null : fecha.plusDays(1).atStartOfDay();
-        return toResponses(funcionRepository.buscarConFiltros(peliculaId, cineId, ciudadFiltro, formato, desde, hasta));
+        return toResponses(funcionRepository.buscarConFiltros(peliculaId, cineId, !incluirInactivos, formato, desde, hasta));
     }
 
     @Transactional(readOnly = true)
@@ -76,10 +83,19 @@ public class FuncionService {
     }
 
     @Transactional
-    public void eliminar(Long id) {
+    public FuncionResponseDTO cancelar(Long id) {
         Funcion funcion = buscarEntidad(id);
         funcion.cambiarEstado(EstadoFuncion.CANCELADA);
-        funcionRepository.save(funcion);
+        return toResponses(List.of(funcionRepository.save(funcion))).get(0);
+    }
+
+    @Transactional
+    public void eliminar(Long id) {
+        Funcion funcion = buscarEntidad(id);
+        if (compraRepository.existsByFuncionId(id)) {
+            throw new RecursoEnUsoException("La funcion tiene compras asociadas", List.of("compras"));
+        }
+        funcionRepository.delete(funcion);
     }
 
     @Transactional
@@ -111,20 +127,27 @@ public class FuncionService {
 
     public void validarHorario(Funcion funcion, Long idIgnorado) {
         if (!funcion.getPelicula().getFormatosDisponibles().contains(funcion.getFormato())) {
-            throw new ReglaNegocioException("La pelicula no esta disponible en el formato solicitado");
+            throw new CampoInvalidoException("formato", "La película no está disponible en ese formato");
         }
-        funcion.calcularHorarioFin();
+        if (!funcion.getSala().isActiva() || !funcion.getSala().getCine().isActivo()) {
+            throw new CampoInvalidoException("salaId", "La sala o su cine están inactivos");
+        }
+        funcion.calcularHorarioFin(minutosLimpieza);
         if (funcion.getFechaHoraInicio().isBefore(LocalDateTime.now())) {
-            throw new ReglaNegocioException("La funcion debe programarse a futuro");
+            throw new CampoInvalidoException("fechaHoraInicio", "La función tiene que ser en el futuro");
         }
-        boolean seSolapa = funcionRepository.findBySalaId(funcion.getSala().getId()).stream()
+        DateTimeFormatter hora = DateTimeFormatter.ofPattern("HH:mm");
+        funcionRepository.findBySalaId(funcion.getSala().getId()).stream()
             .filter(existente -> idIgnorado == null || !existente.getId().equals(idIgnorado))
             .filter(existente -> existente.getEstado() != EstadoFuncion.CANCELADA)
-            .anyMatch(existente -> funcion.getFechaHoraInicio().isBefore(existente.getFechaHoraFin())
-                && funcion.getFechaHoraFin().isAfter(existente.getFechaHoraInicio()));
-        if (seSolapa) {
-            throw new ReglaNegocioException("La sala ya tiene una funcion programada en ese horario");
-        }
+            .filter(existente -> funcion.getFechaHoraInicio().isBefore(existente.getFechaHoraFin())
+                && funcion.getFechaHoraFin().isAfter(existente.getFechaHoraInicio()))
+            .findFirst()
+            .ifPresent(existente -> {
+                throw new CampoInvalidoException("fechaHoraInicio", "Se superpone con " + existente.getPelicula().getTitulo()
+                    + " (" + existente.getFechaHoraInicio().format(hora) + " a " + existente.getFechaHoraFin().format(hora)
+                    + ", con " + minutosLimpieza + " min de limpieza) en esta sala");
+            });
     }
 
     private List<FuncionResponseDTO> toResponses(List<Funcion> funciones) {

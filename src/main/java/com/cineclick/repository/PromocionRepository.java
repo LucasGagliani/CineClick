@@ -10,4 +10,6 @@ public interface PromocionRepository extends JpaRepository<Promocion, Long> {
     Optional<Promocion> findByCodigoIgnoreCase(String codigo);
 
     List<Promocion> findByActivaTrue();
+
+    List<Promocion> findAllByOrderByFechaFinDesc();
 }

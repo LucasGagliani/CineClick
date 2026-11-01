@@ -4,6 +4,8 @@ import com.cineclick.model.TipoSala;
 
 public record SalaResponseDTO(
     Long id,
+    Long cineId,
+    String cineNombre,
     String nombre,
     Integer numero,
     TipoSala tipo,

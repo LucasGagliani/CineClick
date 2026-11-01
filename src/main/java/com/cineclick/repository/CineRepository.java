@@ -8,5 +8,5 @@ import java.util.List;
 public interface CineRepository extends JpaRepository<Cine, Long> {
     List<Cine> findByActivoTrue();
 
-    List<Cine> findByCiudadIgnoreCaseAndActivoTrue(String ciudad);
+    List<Cine> findAllByOrderByNombreAsc();
 }

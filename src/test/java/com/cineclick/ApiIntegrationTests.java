@@ -12,9 +12,11 @@ import com.cineclick.dto.LoginRequestDTO;
 import com.cineclick.dto.PagoRequestDTO;
 import com.cineclick.dto.PeliculaRequestDTO;
 import com.cineclick.dto.PeliculaResponseDTO;
+import com.cineclick.model.Clasificacion;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.model.EstadoCompra;
 import com.cineclick.model.Genero;
+import com.cineclick.model.Idioma;
 import com.cineclick.model.MetodoPago;
 import com.cineclick.model.TipoEntrada;
 import org.junit.jupiter.api.Test;
@@ -63,9 +65,9 @@ class ApiIntegrationTests {
             "Matrix",
             "Un programador descubre que la realidad es una simulacion.",
             136,
-            "+13",
+            Clasificacion.MAS_13,
             Genero.CIENCIA_FICCION,
-            "Subtitulada",
+            Idioma.SUBTITULADA,
             Set.of(FormatoFuncion.DOS_D, FormatoFuncion.IMAX),
             "https://example.com/matrix.jpg",
             LocalDate.of(1999, 3, 31)

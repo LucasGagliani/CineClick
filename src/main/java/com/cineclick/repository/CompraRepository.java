@@ -10,6 +10,16 @@ import java.util.List;
 public interface CompraRepository extends JpaRepository<Compra, Long> {
     List<Compra> findByClienteId(Long clienteId);
 
+    boolean existsByFuncionId(Long funcionId);
+
+    boolean existsByFuncionSalaId(Long salaId);
+
+    boolean existsByFuncionSalaCineId(Long cineId);
+
+    boolean existsByFuncionPeliculaId(Long peliculaId);
+
+    boolean existsByPromocionId(Long promocionId);
+
     List<Compra> findByEstadoAndFechaCompraBefore(EstadoCompra estado, LocalDateTime limite);
 
     List<Compra> findByFuncionIdAndEstadoAndFechaCompraBefore(Long funcionId, EstadoCompra estado, LocalDateTime limite);

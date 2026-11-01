@@ -10,4 +10,6 @@ public interface ListaEsperaRepository extends JpaRepository<ListaEspera, Long> 
     Optional<ListaEspera> findByClienteIdAndPeliculaId(Long clienteId, Long peliculaId);
 
     List<ListaEspera> findByClienteIdOrderByFechaAltaDesc(Long clienteId);
+
+    void deleteByPeliculaId(Long peliculaId);
 }

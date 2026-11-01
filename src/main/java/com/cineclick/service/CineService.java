@@ -3,15 +3,15 @@ package com.cineclick.service;
 import com.cineclick.dto.CineRequestDTO;
 import com.cineclick.dto.CineResponseDTO;
 import com.cineclick.dto.DtoMapper;
-import com.cineclick.dto.SalaRequestDTO;
-import com.cineclick.dto.SalaResponseDTO;
+import com.cineclick.exception.CampoInvalidoException;
+import com.cineclick.exception.RecursoEnUsoException;
 import com.cineclick.exception.RecursoNoEncontradoException;
-import com.cineclick.exception.ReglaNegocioException;
-import com.cineclick.model.Butaca;
+import com.cineclick.model.BarriosCaba;
 import com.cineclick.model.Cine;
-import com.cineclick.model.Sala;
-import com.cineclick.model.TipoButaca;
+import com.cineclick.model.Provincia;
 import com.cineclick.repository.CineRepository;
+import com.cineclick.repository.CompraRepository;
+import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.SalaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +27,12 @@ public class CineService {
 
     private final CineRepository cineRepository;
     private final SalaRepository salaRepository;
+    private final FuncionRepository funcionRepository;
+    private final CompraRepository compraRepository;
 
     @Transactional(readOnly = true)
-    public List<CineResponseDTO> listar(String ciudad) {
-        List<Cine> cines = ciudad == null || ciudad.isBlank()
-            ? cineRepository.findByActivoTrue()
-            : cineRepository.findByCiudadIgnoreCaseAndActivoTrue(ciudad);
+    public List<CineResponseDTO> listar(boolean incluirInactivos) {
+        List<Cine> cines = incluirInactivos ? cineRepository.findAllByOrderByNombreAsc() : cineRepository.findByActivoTrue();
         return cines.stream().map(DtoMapper::toCineResponse).toList();
     }
 
@@ -55,52 +56,29 @@ public class CineService {
     }
 
     @Transactional
-    public void eliminar(Long id) {
+    public CineResponseDTO cambiarEstado(Long id, boolean activo) {
         Cine cine = buscarEntidad(id);
-        cine.setActivo(false);
-        cineRepository.save(cine);
+        cine.setActivo(activo);
+        return DtoMapper.toCineResponse(cineRepository.save(cine));
     }
 
     @Transactional
-    public SalaResponseDTO agregarSala(Long cineId, SalaRequestDTO dto) {
-        Cine cine = buscarEntidad(cineId);
-        Sala sala = new Sala();
-        sala.setNombre(dto.nombre());
-        sala.setNumero(dto.numero());
-        sala.setTipo(dto.tipo());
-        List<Butaca> butacas = dto.plano() != null ? dto.plano().crearButacas(sala) : butacasUniformes(dto);
-        butacas.forEach(sala::agregarButaca);
-        cine.agregarSala(sala);
-        return DtoMapper.toSalaResponse(salaRepository.save(sala));
-    }
-
-    private List<Butaca> butacasUniformes(SalaRequestDTO dto) {
-        if (dto.cantidadFilas() == null || dto.butacasPorFila() == null) {
-            throw new ReglaNegocioException("Hay que indicar un plano o la cantidad de filas y de butacas por fila");
+    public void eliminar(Long id) {
+        Cine cine = buscarEntidad(id);
+        List<String> asociados = new ArrayList<>();
+        if (salaRepository.existsByCineId(id)) {
+            asociados.add("salas");
         }
-        if (dto.cantidadFilas() > 26) {
-            throw new ReglaNegocioException("La cantidad de filas no puede superar 26");
+        if (funcionRepository.existsBySalaCineId(id)) {
+            asociados.add("funciones");
         }
-        List<Butaca> butacas = new ArrayList<>();
-        for (int fila = 0; fila < dto.cantidadFilas(); fila++) {
-            for (int numero = 1; numero <= dto.butacasPorFila(); numero++) {
-                Butaca butaca = new Butaca();
-                butaca.setFila(String.valueOf((char) ('A' + fila)));
-                butaca.setNumero(numero);
-                butaca.setColumna(numero);
-                butaca.setTipo(TipoButaca.NORMAL);
-                butacas.add(butaca);
-            }
+        if (compraRepository.existsByFuncionSalaCineId(id)) {
+            asociados.add("compras");
         }
-        return butacas;
-    }
-
-    @Transactional(readOnly = true)
-    public List<SalaResponseDTO> listarSalas(Long cineId) {
-        buscarEntidad(cineId);
-        return salaRepository.findByCineIdAndActivaTrue(cineId).stream()
-            .map(DtoMapper::toSalaResponse)
-            .toList();
+        if (!asociados.isEmpty()) {
+            throw new RecursoEnUsoException("El cine tiene " + String.join(", ", asociados) + " asociadas", asociados);
+        }
+        cineRepository.delete(cine);
     }
 
     @Transactional(readOnly = true)
@@ -110,9 +88,31 @@ public class CineService {
     }
 
     private void copiarDatos(CineRequestDTO dto, Cine cine) {
-        cine.setNombre(dto.nombre());
-        cine.setDireccion(dto.direccion());
-        cine.setCiudad(dto.ciudad());
-        cine.setTelefono(dto.telefono());
+        String nombre = Normalizador.formatoTitulo(dto.nombre());
+        validarNombreUnico(nombre, cine.getId());
+        cine.setNombre(nombre);
+        cine.setProvincia(dto.provincia());
+        cine.setLocalidad(normalizarLocalidad(dto.provincia(), dto.localidad()));
+        cine.setCalle(Normalizador.texto(dto.calle()));
+        cine.setAltura(dto.altura());
+        cine.setTelefono(Normalizador.telefono(dto.telefono(), "telefono"));
+        cine.setUrlImagen(Normalizador.texto(dto.urlImagen()));
+    }
+
+    private String normalizarLocalidad(Provincia provincia, String localidad) {
+        if (provincia == Provincia.CABA) {
+            return BarriosCaba.buscar(localidad)
+                .orElseThrow(() -> new CampoInvalidoException("localidad", "Elegí un barrio de la lista"));
+        }
+        return Normalizador.formatoTitulo(localidad);
+    }
+
+    private void validarNombreUnico(String nombre, Long idPropio) {
+        String clave = Normalizador.clave(nombre);
+        boolean repetido = cineRepository.findAll().stream()
+            .anyMatch(otro -> !Objects.equals(otro.getId(), idPropio) && Normalizador.clave(otro.getNombre()).equals(clave));
+        if (repetido) {
+            throw new CampoInvalidoException("nombre", "Ya existe un cine con ese nombre");
+        }
     }
 }

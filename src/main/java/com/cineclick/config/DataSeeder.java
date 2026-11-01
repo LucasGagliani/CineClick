@@ -25,8 +25,10 @@ import com.cineclick.repository.PromocionRepository;
 import com.cineclick.repository.SalaRepository;
 import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,7 @@ import java.util.List;
 import java.util.Set;
 
 @Component
+@Order(2)
 @RequiredArgsConstructor
 public class DataSeeder implements ApplicationRunner {
 
@@ -48,6 +51,8 @@ public class DataSeeder implements ApplicationRunner {
     private static final LocalTime PRIMERA_FUNCION = LocalTime.of(13, 30);
     private static final LocalTime ULTIMA_FUNCION = LocalTime.of(23, 0);
     private static final int MINUTOS_ENTRE_FUNCIONES = 20;
+    private static final String TITULO_PROMO_DEMO = "Estrenos online";
+    private static final String CONDICIONES_PROMO_DEMO = "Para cualquier función y formato. Un código por compra, hasta 10 entradas.";
 
     private final UsuarioRepository usuarioRepository;
     private final ClienteRepository clienteRepository;
@@ -60,6 +65,9 @@ public class DataSeeder implements ApplicationRunner {
     private final EntradaRepository entradaRepository;
     private final JdbcTemplate jdbcTemplate;
 
+    @Value("${cineclick.funciones.minutos-limpieza:20}")
+    private int minutosLimpieza;
+
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
@@ -71,9 +79,22 @@ public class DataSeeder implements ApplicationRunner {
         if (promocionRepository.count() == 0) {
             crearPromocionesDemo();
         }
+        completarPromocionDemo();
+        completarImagenesDeCines();
         redistribuirSalasSinPlano();
         if (!funcionRepository.existsByEstadoAndFechaHoraInicioAfter(EstadoFuncion.PROGRAMADA, LocalDateTime.now())) {
             programarSemana(LocalDate.now());
+        }
+    }
+
+    private void completarImagenesDeCines() {
+        for (CineDemo datos : CatalogoDemo.CINES) {
+            if (datos.imagen() == null) {
+                continue;
+            }
+            cineRepository.findAll().stream()
+                .filter(cine -> cine.getNombre().equals(datos.nombre()) && cine.getUrlImagen() == null)
+                .forEach(cine -> cine.setUrlImagen(datos.imagen()));
         }
     }
 
@@ -117,9 +138,12 @@ public class DataSeeder implements ApplicationRunner {
         for (CineDemo datos : CatalogoDemo.CINES) {
             Cine cine = new Cine();
             cine.setNombre(datos.nombre());
-            cine.setDireccion(datos.direccion());
-            cine.setCiudad(datos.ciudad());
+            cine.setProvincia(datos.provincia());
+            cine.setLocalidad(datos.localidad());
+            cine.setCalle(datos.calle());
+            cine.setAltura(datos.altura());
             cine.setTelefono(datos.telefono());
+            cine.setUrlImagen(datos.imagen());
             for (SalaDemo sala : datos.salas()) {
                 cine.agregarSala(nuevaSala(sala));
             }
@@ -254,14 +278,24 @@ public class DataSeeder implements ApplicationRunner {
         funcion.setFormato(formato);
         funcion.setIdioma(pelicula.getIdioma());
         funcion.setEstado(EstadoFuncion.PROGRAMADA);
-        funcion.calcularHorarioFin();
+        funcion.calcularHorarioFin(minutosLimpieza);
         funcionRepository.save(funcion);
+    }
+
+    private void completarPromocionDemo() {
+        promocionRepository.findByCodigoIgnoreCase("ESTRENO10")
+            .filter(promo -> promo.getTitulo() == null)
+            .ifPresent(promo -> {
+                promo.setTitulo(TITULO_PROMO_DEMO);
+                promo.setDescripcion(CONDICIONES_PROMO_DEMO);
+            });
     }
 
     private void crearPromocionesDemo() {
         Promocion promo = new Promocion();
         promo.setCodigo("ESTRENO10");
-        promo.setDescripcion("10% de descuento en compras online");
+        promo.setTitulo(TITULO_PROMO_DEMO);
+        promo.setDescripcion(CONDICIONES_PROMO_DEMO);
         promo.setPorcentajeDescuento(BigDecimal.valueOf(10));
         promo.setFechaInicio(LocalDate.now().minusDays(1));
         promo.setFechaFin(LocalDate.now().plusMonths(2));

@@ -44,9 +44,12 @@ public final class DtoMapper {
         return new CineResponseDTO(
             cine.getId(),
             cine.getNombre(),
-            cine.getDireccion(),
-            cine.getCiudad(),
+            cine.getProvincia(),
+            cine.getLocalidad(),
+            cine.getCalle(),
+            cine.getAltura(),
             cine.getTelefono(),
+            cine.getUrlImagen(),
             cine.isActivo(),
             cine.getSalas().stream()
                 .sorted(Comparator.comparing(Sala::getNumero))
@@ -58,6 +61,8 @@ public final class DtoMapper {
     public static SalaResponseDTO toSalaResponse(Sala sala) {
         return new SalaResponseDTO(
             sala.getId(),
+            sala.getCine().getId(),
+            sala.getCine().getNombre(),
             sala.getNombre(),
             sala.getNumero(),
             sala.getTipo(),
@@ -124,6 +129,7 @@ public final class DtoMapper {
             compra.getCliente().nombreCompleto(),
             compra.getFuncion().getId(),
             compra.getFuncion().getPelicula().getTitulo(),
+            toFuncionCompra(compra.getFuncion()),
             compra.getFechaCompra(),
             compra.calcularSubtotal(),
             compra.getTotal(),
@@ -133,6 +139,30 @@ public final class DtoMapper {
             compra.getPago() == null ? null : toPagoResponse(compra.getPago()),
             pendiente ? compra.expiraEn() : null,
             pendiente ? compra.segundosRestantes(ahora) : null
+        );
+    }
+
+    public static FuncionCompraDTO toFuncionCompra(Funcion funcion) {
+        Pelicula pelicula = funcion.getPelicula();
+        Cine cine = funcion.getSala().getCine();
+        return new FuncionCompraDTO(
+            funcion.getId(),
+            funcion.getFechaHoraInicio(),
+            funcion.getFechaHoraFin(),
+            funcion.getFormato(),
+            funcion.getIdioma(),
+            funcion.getEstado(),
+            pelicula.getId(),
+            pelicula.getTitulo(),
+            pelicula.getUrlPoster(),
+            pelicula.getClasificacion(),
+            cine.getId(),
+            cine.getNombre(),
+            funcion.getSala().getNombre(),
+            cine.getProvincia(),
+            cine.getLocalidad(),
+            cine.getCalle(),
+            cine.getAltura()
         );
     }
 
@@ -166,6 +196,7 @@ public final class DtoMapper {
         return new PromocionResponseDTO(
             promocion.getId(),
             promocion.getCodigo(),
+            promocion.getTitulo(),
             promocion.getDescripcion(),
             promocion.getPorcentajeDescuento(),
             promocion.getFechaInicio(),

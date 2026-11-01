@@ -37,15 +37,17 @@ public class Pelicula {
     @Column(nullable = false)
     private Integer duracionMinutos;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String clasificacion;
+    private Clasificacion clasificacion;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Genero genero;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
-    private String idioma;
+    private Idioma idioma;
 
     @ElementCollection(targetClass = FormatoFuncion.class)
     @CollectionTable(name = "pelicula_formatos", joinColumns = @JoinColumn(name = "pelicula_id"))

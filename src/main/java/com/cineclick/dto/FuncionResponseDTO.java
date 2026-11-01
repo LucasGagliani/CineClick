@@ -2,6 +2,7 @@ package com.cineclick.dto;
 
 import com.cineclick.model.EstadoFuncion;
 import com.cineclick.model.FormatoFuncion;
+import com.cineclick.model.Idioma;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,7 +19,7 @@ public record FuncionResponseDTO(
     LocalDateTime fechaHoraFin,
     BigDecimal precioBase,
     FormatoFuncion formato,
-    String idioma,
+    Idioma idioma,
     EstadoFuncion estado,
     Integer butacasLibres,
     Integer capacidadSala

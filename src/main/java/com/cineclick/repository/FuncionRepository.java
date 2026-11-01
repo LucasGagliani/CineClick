@@ -16,6 +16,12 @@ public interface FuncionRepository extends JpaRepository<Funcion, Long> {
 
     List<Funcion> findBySalaId(Long salaId);
 
+    boolean existsBySalaId(Long salaId);
+
+    boolean existsBySalaCineId(Long cineId);
+
+    boolean existsByPeliculaId(Long peliculaId);
+
     boolean existsByEstadoAndFechaHoraInicioAfter(EstadoFuncion estado, LocalDateTime desde);
 
     boolean existsByPeliculaIdAndEstadoAndFechaHoraInicioAfter(Long peliculaId, EstadoFuncion estado, LocalDateTime desde);
@@ -34,7 +40,7 @@ public interface FuncionRepository extends JpaRepository<Funcion, Long> {
         join fetch s.cine c
         where (:peliculaId is null or p.id = :peliculaId)
           and (:cineId is null or c.id = :cineId)
-          and (:ciudad is null or lower(c.ciudad) = lower(:ciudad))
+          and (:soloCinesActivos = false or c.activo = true)
           and (:formato is null or f.formato = :formato)
           and (cast(:desde as localdatetime) is null or f.fechaHoraInicio >= :desde)
           and (cast(:hasta as localdatetime) is null or f.fechaHoraInicio < :hasta)
@@ -43,7 +49,7 @@ public interface FuncionRepository extends JpaRepository<Funcion, Long> {
     List<Funcion> buscarConFiltros(
         @Param("peliculaId") Long peliculaId,
         @Param("cineId") Long cineId,
-        @Param("ciudad") String ciudad,
+        @Param("soloCinesActivos") boolean soloCinesActivos,
         @Param("formato") FormatoFuncion formato,
         @Param("desde") LocalDateTime desde,
         @Param("hasta") LocalDateTime hasta

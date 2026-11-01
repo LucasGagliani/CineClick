@@ -4,13 +4,16 @@ import com.cineclick.dto.DtoMapper;
 import com.cineclick.dto.PeliculaDestacadaDTO;
 import com.cineclick.dto.PeliculaRequestDTO;
 import com.cineclick.dto.PeliculaResponseDTO;
+import com.cineclick.exception.RecursoEnUsoException;
 import com.cineclick.exception.RecursoNoEncontradoException;
 import com.cineclick.exception.ReglaNegocioException;
 import com.cineclick.model.CategoriaDestacada;
 import com.cineclick.model.EstadoFuncion;
 import com.cineclick.model.Genero;
 import com.cineclick.model.Pelicula;
+import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.FuncionRepository;
+import com.cineclick.repository.ListaEsperaRepository;
 import com.cineclick.repository.PeliculaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -32,9 +36,17 @@ public class PeliculaService {
 
     private final PeliculaRepository peliculaRepository;
     private final FuncionRepository funcionRepository;
+    private final CompraRepository compraRepository;
+    private final ListaEsperaRepository listaEsperaRepository;
 
     @Transactional(readOnly = true)
-    public List<PeliculaResponseDTO> listar(Genero genero) {
+    public List<PeliculaResponseDTO> listar(Genero genero, boolean incluirInactivas) {
+        if (incluirInactivas) {
+            return peliculaRepository.findAll().stream()
+                .sorted(Comparator.comparing(Pelicula::getTitulo, String.CASE_INSENSITIVE_ORDER))
+                .map(DtoMapper::toPeliculaResponse)
+                .toList();
+        }
         List<Pelicula> peliculas = genero == null
             ? peliculaRepository.findByActivaTrue()
             : peliculaRepository.findByGeneroAndActivaTrue(genero);
@@ -113,10 +125,27 @@ public class PeliculaService {
     }
 
     @Transactional
+    public PeliculaResponseDTO cambiarEstado(Long id, boolean activa) {
+        Pelicula pelicula = buscarEntidad(id);
+        pelicula.setActiva(activa);
+        return DtoMapper.toPeliculaResponse(peliculaRepository.save(pelicula));
+    }
+
+    @Transactional
     public void eliminar(Long id) {
         Pelicula pelicula = buscarEntidad(id);
-        pelicula.setActiva(false);
-        peliculaRepository.save(pelicula);
+        List<String> asociados = new ArrayList<>();
+        if (funcionRepository.existsByPeliculaId(id)) {
+            asociados.add("funciones");
+        }
+        if (compraRepository.existsByFuncionPeliculaId(id)) {
+            asociados.add("compras");
+        }
+        if (!asociados.isEmpty()) {
+            throw new RecursoEnUsoException("La pelicula tiene " + String.join(", ", asociados) + " asociadas", asociados);
+        }
+        listaEsperaRepository.deleteByPeliculaId(id);
+        peliculaRepository.delete(pelicula);
     }
 
     @Transactional(readOnly = true)
@@ -135,14 +164,14 @@ public class PeliculaService {
     }
 
     private void copiarDatos(PeliculaRequestDTO dto, Pelicula pelicula) {
-        pelicula.setTitulo(dto.titulo());
-        pelicula.setSinopsis(dto.sinopsis());
+        pelicula.setTitulo(Normalizador.texto(dto.titulo()));
+        pelicula.setSinopsis(Normalizador.texto(dto.sinopsis()));
         pelicula.setDuracionMinutos(dto.duracionMinutos());
         pelicula.setClasificacion(dto.clasificacion());
         pelicula.setGenero(dto.genero());
         pelicula.setIdioma(dto.idioma());
         pelicula.setFormatosDisponibles(dto.formatosDisponibles());
-        pelicula.setUrlPoster(dto.urlPoster());
+        pelicula.setUrlPoster(Normalizador.texto(dto.urlPoster()));
         pelicula.setFechaEstreno(dto.fechaEstreno());
         if (dto.destacada() != null) {
             pelicula.setDestacada(dto.destacada());

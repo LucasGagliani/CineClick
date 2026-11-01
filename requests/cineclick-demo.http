@@ -39,9 +39,9 @@ Content-Type: application/json
   "titulo": "Matrix",
   "sinopsis": "Un programador descubre que la realidad es una simulacion.",
   "duracionMinutos": 136,
-  "clasificacion": "+13",
+  "clasificacion": "MAS_13",
   "genero": "CIENCIA_FICCION",
-  "idioma": "Subtitulada",
+  "idioma": "SUBTITULADA",
   "formatosDisponibles": ["DOS_D", "IMAX"],
   "urlPoster": "https://example.com/matrix.jpg",
   "fechaEstreno": "1999-03-31"
@@ -61,15 +61,15 @@ Content-Type: application/json
   "titulo": "Matrix Recargado",
   "sinopsis": "Neo y la resistencia siguen peleando contra las maquinas.",
   "duracionMinutos": 138,
-  "clasificacion": "+13",
+  "clasificacion": "MAS_13",
   "genero": "CIENCIA_FICCION",
-  "idioma": "Subtitulada",
+  "idioma": "SUBTITULADA",
   "formatosDisponibles": ["DOS_D", "IMAX"],
   "urlPoster": "https://example.com/matrix.jpg",
   "fechaEstreno": "2003-05-15"
 }
 
-### Borrar la pelicula (baja logica, queda con activa = false)
+### Borrar la pelicula (no tiene funciones, asi que se borra; con funciones daria 409)
 DELETE http://localhost:8080/api/peliculas/3
 
 
