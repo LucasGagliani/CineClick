@@ -16,6 +16,8 @@ public interface FuncionRepository extends JpaRepository<Funcion, Long> {
 
     List<Funcion> findBySalaId(Long salaId);
 
+    boolean existsByEstadoAndFechaHoraInicioAfter(EstadoFuncion estado, LocalDateTime desde);
+
     boolean existsByPeliculaIdAndEstadoAndFechaHoraInicioAfter(Long peliculaId, EstadoFuncion estado, LocalDateTime desde);
 
     @Query("select distinct f.pelicula.id from Funcion f where f.estado = com.cineclick.model.EstadoFuncion.PROGRAMADA and f.fechaHoraInicio > :desde")

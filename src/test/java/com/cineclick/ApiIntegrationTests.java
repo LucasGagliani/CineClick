@@ -54,7 +54,7 @@ class ApiIntegrationTests {
         ResponseEntity<String> response = restTemplate.getForEntity(url("/api/peliculas"), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).contains("Interestelar");
+        assertThat(response.getBody()).contains("Wildwood");
     }
 
     @Test
