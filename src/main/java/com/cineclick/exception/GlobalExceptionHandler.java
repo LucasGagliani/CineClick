@@ -46,6 +46,11 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.UNAUTHORIZED, ex.getMessage(), request.getRequestURI(), List.of());
     }
 
+    @ExceptionHandler(AccesoDenegadoException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarAccesoDenegado(AccesoDenegadoException ex, HttpServletRequest request) {
+        return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI(), List.of());
+    }
+
     @ExceptionHandler(RecursoEnUsoException.class)
     public ResponseEntity<ErrorResponseDTO> manejarEnUso(RecursoEnUsoException ex, HttpServletRequest request) {
         return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), ex.getAsociados());

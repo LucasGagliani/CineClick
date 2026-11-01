@@ -1,6 +1,13 @@
 package com.cineclick;
 
 import com.cineclick.dto.ButacaResponseDTO;
+import com.cineclick.dto.CineRequestDTO;
+import com.cineclick.dto.CineResponseDTO;
+import com.cineclick.dto.FuncionRequestDTO;
+import com.cineclick.dto.LoginResponseDTO;
+import com.cineclick.dto.MetricasResponseDTO;
+import com.cineclick.dto.SalaRequestDTO;
+import com.cineclick.dto.SalaResponseDTO;
 import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
 import com.cineclick.dto.CompraRequestDTO;
@@ -19,6 +26,18 @@ import com.cineclick.model.Genero;
 import com.cineclick.model.Idioma;
 import com.cineclick.model.MetodoPago;
 import com.cineclick.model.TipoEntrada;
+import com.cineclick.model.Butaca;
+import com.cineclick.model.Compra;
+import com.cineclick.model.Entrada;
+import com.cineclick.model.EstadoEntrada;
+import com.cineclick.model.Provincia;
+import com.cineclick.model.TipoSala;
+import com.cineclick.repository.ButacaRepository;
+import com.cineclick.repository.ClienteRepository;
+import com.cineclick.repository.CompraRepository;
+import com.cineclick.repository.FuncionRepository;
+import com.cineclick.service.MetricasService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -33,7 +52,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.TemporalAdjusters;
+import java.util.UUID;
 import java.util.List;
 import java.util.Set;
 
@@ -304,6 +328,174 @@ class ApiIntegrationTests {
             String.class
         );
         assertThat(duplicado.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Autowired
+    private CompraRepository compraRepository;
+
+    @Autowired
+    private FuncionRepository funcionRepository;
+
+    @Autowired
+    private ButacaRepository butacaRepository;
+
+    @Autowired
+    private ClienteRepository clienteRepository;
+
+    private record FixtureMetricas(Long cineId, Long funcionGrande, Long funcionChica, Long clienteId, LocalDate sabado) {
+    }
+
+    @Test
+    void metricasNoSumanIngresosDeComprasCanceladasNiVencidas() {
+        FixtureMetricas fx = fixtureMetricas();
+        LocalDateTime ahora = LocalDateTime.now(MetricasService.ZONA);
+        venderEntradas(fx, fx.funcionGrande(), 0, 2, EstadoCompra.CONFIRMADA, ahora.minusMinutes(30));
+        venderEntradas(fx, fx.funcionGrande(), 2, 3, EstadoCompra.CANCELADA, ahora.minusMinutes(20));
+        venderEntradas(fx, fx.funcionGrande(), 5, 1, EstadoCompra.PENDIENTE_PAGO, ahora.minusMinutes(15));
+
+        LocalDate hoy = ahora.toLocalDate();
+        MetricasResponseDTO metricas = pedirMetricas(hoy, hoy, fx.cineId());
+
+        assertThat(metricas.resumen().ingresos().valor()).isEqualByComparingTo("2000");
+        assertThat(metricas.resumen().entradasVendidas().valor()).isEqualByComparingTo("2");
+        assertThat(metricas.resumen().ticketPromedio().valor()).isEqualByComparingTo("2000");
+        assertThat(metricas.conversion().creadas()).isEqualTo(3);
+        assertThat(metricas.conversion().pagadas()).isEqualTo(1);
+        assertThat(metricas.conversion().vencidas()).isEqualTo(2);
+        assertThat(metricas.conversion().pendientes()).isZero();
+    }
+
+    @Test
+    void metricasCuentanIngresosPorFechaDeCompraYOcupacionPorFechaDeFuncion() {
+        FixtureMetricas fx = fixtureMetricas();
+        LocalDateTime ahora = LocalDateTime.now(MetricasService.ZONA);
+        venderEntradas(fx, fx.funcionGrande(), 0, 10, EstadoCompra.CONFIRMADA, ahora.minusMinutes(5));
+
+        LocalDate hoy = ahora.toLocalDate();
+        MetricasResponseDTO deHoy = pedirMetricas(hoy, hoy, fx.cineId());
+        assertThat(deHoy.resumen().ingresos().valor()).isEqualByComparingTo("10000");
+        assertThat(deHoy.resumen().ocupacion().valor()).isEqualByComparingTo("0");
+
+        MetricasResponseDTO delSabado = pedirMetricas(fx.sabado(), fx.sabado(), fx.cineId());
+        assertThat(delSabado.resumen().ingresos().valor()).isEqualByComparingTo("0");
+        assertThat(delSabado.resumen().ocupacion().valor()).isEqualByComparingTo("0.0667");
+        assertThat(delSabado.franjas()).containsExactly(new MetricasResponseDTO.Franja(6, 18, 10));
+    }
+
+    @Test
+    void metricasCalculanLaOcupacionPonderadaPorCapacidad() {
+        FixtureMetricas fx = fixtureMetricas();
+        LocalDateTime ayer = LocalDateTime.now(MetricasService.ZONA).minusDays(1);
+        venderEntradas(fx, fx.funcionGrande(), 0, 50, EstadoCompra.CONFIRMADA, ayer);
+        venderEntradas(fx, fx.funcionChica(), 0, 50, EstadoCompra.CONFIRMADA, ayer);
+
+        MetricasResponseDTO metricas = pedirMetricas(fx.sabado(), fx.sabado(), fx.cineId());
+
+        assertThat(metricas.resumen().ocupacion().valor()).isEqualByComparingTo("0.6667");
+    }
+
+    @Test
+    void metricasComparanConUnPeriodoAnteriorDelMismoLargo() {
+        FixtureMetricas fx = fixtureMetricas();
+        LocalDate hoy = LocalDate.now(MetricasService.ZONA);
+        venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, hoy.minusDays(1).atTime(12, 0));
+        venderEntradas(fx, fx.funcionGrande(), 1, 2, EstadoCompra.CONFIRMADA, hoy.minusDays(3).atTime(12, 0));
+        venderEntradas(fx, fx.funcionGrande(), 3, 5, EstadoCompra.CONFIRMADA, hoy.minusDays(6).atTime(12, 0));
+
+        MetricasResponseDTO metricas = pedirMetricas(hoy.minusDays(2), hoy, fx.cineId());
+
+        assertThat(metricas.desdeAnterior()).isEqualTo(hoy.minusDays(5));
+        assertThat(metricas.hastaAnterior()).isEqualTo(hoy.minusDays(3));
+        assertThat(metricas.resumen().ingresos().valor()).isEqualByComparingTo("1000");
+        assertThat(metricas.resumen().ingresos().valorAnterior()).isEqualByComparingTo("2000");
+    }
+
+    @Test
+    void metricasSoloLasVeUnAdministrador() {
+        LocalDate hoy = LocalDate.now(MetricasService.ZONA);
+        String ruta = "/api/admin/metricas?desde=" + hoy + "&hasta=" + hoy;
+        ClienteResponseDTO cliente = crearCliente("metricas-" + UUID.randomUUID() + "@mail.com");
+
+        assertThat(restTemplate.exchange(url(ruta), HttpMethod.GET, conUsuario(cliente.usuarioId()), String.class).getStatusCode())
+            .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(restTemplate.getForEntity(url(ruta), String.class).getStatusCode())
+            .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(restTemplate.exchange(url(ruta), HttpMethod.GET, conUsuario(idAdmin()), String.class).getStatusCode())
+            .isEqualTo(HttpStatus.OK);
+    }
+
+    // Cine nuevo con dos salas (100 y 50 butacas) y una funcion en cada una el proximo sabado a las 18
+    private FixtureMetricas fixtureMetricas() {
+        String sufijo = UUID.randomUUID().toString().substring(0, 8);
+        CineResponseDTO cine = restTemplate.postForEntity(url("/api/cines"),
+            new CineRequestDTO("Metricas " + sufijo, Provincia.CABA, "Palermo", "Calle", 100, null, null), CineResponseDTO.class).getBody();
+        SalaResponseDTO grande = restTemplate.postForEntity(url("/api/cines/" + cine.id() + "/salas"),
+            new SalaRequestDTO("Grande", 1, TipoSala.TRADICIONAL, 10, 10, null), SalaResponseDTO.class).getBody();
+        SalaResponseDTO chica = restTemplate.postForEntity(url("/api/cines/" + cine.id() + "/salas"),
+            new SalaRequestDTO("Chica", 2, TipoSala.TRADICIONAL, 5, 10, null), SalaResponseDTO.class).getBody();
+        PeliculaResponseDTO pelicula = restTemplate.postForEntity(url("/api/peliculas"), new PeliculaRequestDTO(
+            "Metricas " + sufijo, "Pelicula para las metricas", 100, Clasificacion.ATP, Genero.DRAMA, Idioma.CASTELLANO,
+            Set.of(FormatoFuncion.DOS_D), null, null
+        ), PeliculaResponseDTO.class).getBody();
+        LocalDate sabado = LocalDate.now(MetricasService.ZONA).with(TemporalAdjusters.next(DayOfWeek.SATURDAY));
+        Long funcionGrande = crearFuncion(pelicula.id(), grande.id(), sabado.atTime(18, 0));
+        Long funcionChica = crearFuncion(pelicula.id(), chica.id(), sabado.atTime(18, 0));
+        ClienteResponseDTO cliente = crearCliente("metricas-" + sufijo + "@mail.com");
+        return new FixtureMetricas(cine.id(), funcionGrande, funcionChica, cliente.id(), sabado);
+    }
+
+    private Long crearFuncion(Long peliculaId, Long salaId, LocalDateTime inicio) {
+        FuncionResponseDTO funcion = restTemplate.postForEntity(url("/api/funciones"),
+            new FuncionRequestDTO(peliculaId, salaId, inicio, new BigDecimal("1000"), FormatoFuncion.DOS_D, Idioma.CASTELLANO),
+            FuncionResponseDTO.class).getBody();
+        assertThat(funcion).isNotNull();
+        return funcion.id();
+    }
+
+    // Compra armada directo con los repositorios (asi se puede fijar la fecha y el estado), con
+    // "cantidad" entradas de $ 1000 en las butacas que siguen a "desde"
+    private void venderEntradas(FixtureMetricas fx, Long funcionId, int desde, int cantidad, EstadoCompra estado, LocalDateTime fecha) {
+        var funcion = funcionRepository.findById(funcionId).orElseThrow();
+        List<Butaca> butacas = butacaRepository.findBySalaIdAndActivaTrue(funcion.getSala().getId());
+        Compra compra = new Compra();
+        compra.setCliente(clienteRepository.findById(fx.clienteId()).orElseThrow());
+        compra.setFuncion(funcion);
+        compra.setFechaCompra(fecha);
+        compra.setEstado(estado);
+        for (Butaca butaca : butacas.subList(desde, desde + cantidad)) {
+            Entrada entrada = new Entrada();
+            entrada.setButaca(butaca);
+            entrada.setCodigoQr(UUID.randomUUID().toString().substring(0, 18));
+            entrada.setPrecioUnitario(new BigDecimal("1000"));
+            entrada.setTipo(TipoEntrada.GENERAL);
+            if (estado == EstadoCompra.CANCELADA) {
+                entrada.setEstado(EstadoEntrada.CANCELADA);
+                entrada.setVigente(null);
+            }
+            compra.agregarEntrada(entrada);
+        }
+        compra.setTotal(new BigDecimal(1000L * cantidad));
+        compraRepository.save(compra);
+    }
+
+    private MetricasResponseDTO pedirMetricas(LocalDate desde, LocalDate hasta, Long cineId) {
+        ResponseEntity<MetricasResponseDTO> respuesta = restTemplate.exchange(
+            url("/api/admin/metricas?desde=" + desde + "&hasta=" + hasta + "&cineId=" + cineId),
+            HttpMethod.GET, conUsuario(idAdmin()), MetricasResponseDTO.class
+        );
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return respuesta.getBody();
+    }
+
+    private Long idAdmin() {
+        return restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO("admin@cineclick.com", "admin123"), LoginResponseDTO.class)
+            .getBody().usuarioId();
+    }
+
+    private HttpEntity<Void> conUsuario(Long usuarioId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Usuario-Id", String.valueOf(usuarioId));
+        return new HttpEntity<>(headers);
     }
 
     private ClienteResponseDTO crearCliente(String email) {
