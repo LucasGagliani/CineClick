@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="documentacion/marca/cineclick-logo-oscuro.svg">
+    <img src="documentacion/marca/cineclick-logo-claro.svg" alt="CineClick" height="64">
+  </picture>
+</p>
+
 # CineClick – Backend
 
 Backend de CineClick, una app de venta de entradas de cine, para el TPO de Aplicaciones Interactivas: API REST con Spring Boot y base de datos SQL. El frontend (React) está en [Roman-lc/FrontCineClick](https://github.com/Roman-lc/FrontCineClick).
