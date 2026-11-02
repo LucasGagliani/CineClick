@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.CineRequestDTO;
 import com.cineclick.dto.CineResponseDTO;
 import com.cineclick.dto.EstadoRequestDTO;
@@ -44,22 +45,26 @@ public class CineController {
         return cineService.buscarPorId(id);
     }
 
+    @SoloAdmin
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CineResponseDTO crear(@Valid @RequestBody CineRequestDTO dto) {
         return cineService.crear(dto);
     }
 
+    @SoloAdmin
     @PutMapping("/{id}")
     public CineResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody CineRequestDTO dto) {
         return cineService.actualizar(id, dto);
     }
 
+    @SoloAdmin
     @PatchMapping("/{id}/estado")
     public CineResponseDTO cambiarEstado(@PathVariable Long id, @Valid @RequestBody EstadoRequestDTO dto) {
         return cineService.cambiarEstado(id, dto.activo());
     }
 
+    @SoloAdmin
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable Long id) {
@@ -71,6 +76,7 @@ public class CineController {
         return salaService.listarDelCine(id);
     }
 
+    @SoloAdmin
     @PostMapping("/{id}/salas")
     @ResponseStatus(HttpStatus.CREATED)
     public SalaResponseDTO agregarSala(@PathVariable Long id, @Valid @RequestBody SalaRequestDTO dto) {

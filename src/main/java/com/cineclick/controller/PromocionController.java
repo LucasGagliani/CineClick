@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.EstadoRequestDTO;
 import com.cineclick.dto.PromocionRequestDTO;
 import com.cineclick.dto.PromocionResponseDTO;
@@ -30,6 +31,7 @@ public class PromocionController {
 
     private final PromocionService promocionService;
 
+    @SoloAdmin
     @GetMapping
     public List<PromocionResponseDTO> listar(@RequestHeader(value = "X-Usuario-Id", required = false) Long usuarioId) {
         return promocionService.listarTodas(usuarioId);
@@ -40,22 +42,26 @@ public class PromocionController {
         return promocionService.listarVigentes(usuarioId);
     }
 
+    @SoloAdmin
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PromocionResponseDTO crear(@Valid @RequestBody PromocionRequestDTO dto) {
         return promocionService.crear(dto);
     }
 
+    @SoloAdmin
     @PutMapping("/{id}")
     public PromocionResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody PromocionRequestDTO dto) {
         return promocionService.actualizar(id, dto);
     }
 
+    @SoloAdmin
     @PatchMapping("/{id}/estado")
     public PromocionResponseDTO cambiarEstado(@PathVariable Long id, @Valid @RequestBody EstadoRequestDTO dto) {
         return promocionService.cambiarEstado(id, dto.activo());
     }
 
+    @SoloAdmin
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable Long id) {

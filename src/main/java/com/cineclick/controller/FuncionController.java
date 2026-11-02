@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.ButacaResponseDTO;
 import com.cineclick.dto.CombinablesResponseDTO;
 import com.cineclick.dto.FuncionRequestDTO;
@@ -51,22 +52,26 @@ public class FuncionController {
         return funcionService.buscarPorId(id);
     }
 
+    @SoloAdmin
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public FuncionResponseDTO crear(@Valid @RequestBody FuncionRequestDTO dto) {
         return funcionService.crear(dto);
     }
 
+    @SoloAdmin
     @PutMapping("/{id}")
     public FuncionResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody FuncionRequestDTO dto) {
         return funcionService.actualizar(id, dto);
     }
 
+    @SoloAdmin
     @PatchMapping("/{id}/cancelar")
     public FuncionResponseDTO cancelar(@PathVariable Long id) {
         return funcionService.cancelar(id);
     }
 
+    @SoloAdmin
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable Long id) {

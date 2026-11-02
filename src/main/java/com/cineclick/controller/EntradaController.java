@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.ValidacionEntradaResponseDTO;
 import com.cineclick.dto.ValidarEntradaRequestDTO;
 import com.cineclick.service.EntradaService;
@@ -20,6 +21,7 @@ public class EntradaController {
 
     private final EntradaService entradaService;
 
+    @SoloAdmin
     @PostMapping("/{codigo}/validar")
     public ValidacionEntradaResponseDTO validar(@PathVariable String codigo, @Valid @RequestBody ValidarEntradaRequestDTO dto) {
         return entradaService.validar(codigo, dto.funcionId());

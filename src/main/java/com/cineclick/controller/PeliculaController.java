@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.EstadoRequestDTO;
 import com.cineclick.dto.ListaEsperaRequestDTO;
 import com.cineclick.dto.ListaEsperaResponseDTO;
@@ -71,22 +72,26 @@ public class PeliculaController {
         return peliculaService.buscarPorId(id);
     }
 
+    @SoloAdmin
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PeliculaResponseDTO crear(@Valid @RequestBody PeliculaRequestDTO dto) {
         return peliculaService.crear(dto);
     }
 
+    @SoloAdmin
     @PutMapping("/{id}")
     public PeliculaResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody PeliculaRequestDTO dto) {
         return peliculaService.actualizar(id, dto);
     }
 
+    @SoloAdmin
     @PatchMapping("/{id}/estado")
     public PeliculaResponseDTO cambiarEstado(@PathVariable Long id, @Valid @RequestBody EstadoRequestDTO dto) {
         return peliculaService.cambiarEstado(id, dto.activo());
     }
 
+    @SoloAdmin
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable Long id) {

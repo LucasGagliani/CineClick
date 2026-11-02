@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.EstadoRequestDTO;
 import com.cineclick.dto.SalaRequestDTO;
 import com.cineclick.dto.SalaResponseDTO;
@@ -33,16 +34,19 @@ public class SalaController {
         return salaService.listarTodas();
     }
 
+    @SoloAdmin
     @PutMapping("/{id}")
     public SalaResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody SalaRequestDTO dto) {
         return salaService.actualizar(id, dto);
     }
 
+    @SoloAdmin
     @PatchMapping("/{id}/estado")
     public SalaResponseDTO cambiarEstado(@PathVariable Long id, @Valid @RequestBody EstadoRequestDTO dto) {
         return salaService.cambiarEstado(id, dto.activo());
     }
 
+    @SoloAdmin
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable Long id) {

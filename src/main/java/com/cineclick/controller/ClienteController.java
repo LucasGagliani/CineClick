@@ -1,5 +1,6 @@
 package com.cineclick.controller;
 
+import com.cineclick.config.SoloAdmin;
 import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
 import com.cineclick.dto.CompraResponseDTO;
@@ -33,6 +34,7 @@ public class ClienteController {
     private final CompraService compraService;
     private final ListaEsperaService listaEsperaService;
 
+    @SoloAdmin
     @GetMapping
     public List<ClienteResponseDTO> listar() {
         return clienteService.listar();
@@ -44,16 +46,19 @@ public class ClienteController {
         return clienteService.registrar(dto);
     }
 
+    @SoloAdmin
     @GetMapping("/{id}")
     public ClienteResponseDTO obtener(@PathVariable Long id) {
         return clienteService.buscarPorId(id);
     }
 
+    @SoloAdmin
     @PutMapping("/{id}")
     public ClienteResponseDTO actualizar(@PathVariable Long id, @Valid @RequestBody ClienteRequestDTO dto) {
         return clienteService.actualizar(id, dto);
     }
 
+    @SoloAdmin
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable Long id) {
