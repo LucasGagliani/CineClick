@@ -72,21 +72,24 @@ public class DataSeeder implements ApplicationRunner {
         LocalDateTime ahora = LocalDateTime.now().withSecond(0).withNano(0);
         LocalDate hoy = ahora.toLocalDate();
         boolean baseVacia = cineRepository.count() == 0 && peliculaRepository.count() == 0;
-
         Usuario admin = usuarioPara(CatalogoDemo.ADMIN, RolUsuario.ADMIN);
-        Cliente frecuente = clientePara(CatalogoDemo.FRECUENTE, ahora.minusDays(200));
-        Cliente hoyALaNoche = clientePara(CatalogoDemo.HOY_A_LA_NOCHE, ahora.minusDays(40));
-        clientePara(CatalogoDemo.SIN_COMPRAS, ahora.minusDays(1));
-        Cliente ocasional = clientePara(CatalogoDemo.OCASIONAL, ahora.minusDays(90));
-        Map<String, Promocion> promociones = crearPromocionesQueFalten(ahora);
 
         if (baseVacia) {
+            Cliente frecuente = clientePara(CatalogoDemo.FRECUENTE, ahora.minusDays(200));
+            Cliente hoyALaNoche = clientePara(CatalogoDemo.HOY_A_LA_NOCHE, ahora.minusDays(40));
+            clientePara(CatalogoDemo.SIN_COMPRAS, ahora.minusDays(1));
+            Cliente ocasional = clientePara(CatalogoDemo.OCASIONAL, ahora.minusDays(90));
+            Map<String, Promocion> promociones = crearPromocionesQueFalten(ahora);
             crearCatalogo(hoy);
             List<Funcion> funciones = programador.programar(hoy.minusDays(DIAS_HACIA_ATRAS), hoy.plusDays(DIAS_HACIA_ADELANTE));
             List<Cliente> genericos = crearClientesGenericos(ahora);
             generadorDeCompras.generar(funciones, new GeneradorDeCompras.Clientes(frecuente, hoyALaNoche, ocasional, genericos), promociones, ahora);
             log.info("Demo: base sembrada con {} funciones y {} clientes (admin: {})", funciones.size(), genericos.size() + 4, admin.getEmail());
         } else {
+            if (!usuarioRepository.existsByEmailIgnoreCase(CatalogoDemo.FRECUENTE.email())) {
+                log.warn("Demo: la base ya tenia datos de antes, asi que no se sembraron las cuentas ni las compras de demo. "
+                    + "Para la demo completa: frenar el backend, borrar la carpeta data/ y volver a arrancar.");
+            }
             int nuevas = programador.programar(hoy, hoy.plusDays(DIAS_HACIA_ADELANTE)).size();
             if (nuevas > 0) {
                 log.info("Demo: se programaron {} funciones para cubrir los proximos {} dias", nuevas, DIAS_HACIA_ADELANTE);

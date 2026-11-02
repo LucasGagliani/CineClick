@@ -56,6 +56,8 @@ Qué crea:
 
 **Resetear la demo:** frenar el backend, borrar la carpeta `data/` y volver a arrancar. Se siembra todo de nuevo con las fechas del día.
 
+La demo completa (cuentas de prueba, compras y promociones) solo se siembra sobre una base vacía. Si `data/` ya tenía datos de una versión anterior, el backend deja un aviso en el log y no crea las cuentas de prueba (que aparecerían sin compras): hay que resetear.
+
 ### Cuentas de prueba
 
 | Cuenta | Email | Contraseña | Qué muestra |
