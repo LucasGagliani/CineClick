@@ -4,6 +4,9 @@ import com.cineclick.dto.ArrepentimientoRequestDTO;
 import com.cineclick.dto.ArrepentimientoResponseDTO;
 import com.cineclick.dto.ButacaResponseDTO;
 import com.cineclick.dto.CombinablesResponseDTO;
+import com.cineclick.dto.CompraAdminDTO;
+import com.cineclick.dto.DetalleCompraAdminDTO;
+import com.cineclick.dto.PaginaDTO;
 import com.cineclick.dto.PromocionRequestDTO;
 import com.cineclick.dto.PromocionResponseDTO;
 import com.cineclick.dto.ResumenCompraDTO;
@@ -44,6 +47,7 @@ import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.FuncionRepository;
+import com.cineclick.repository.UsuarioRepository;
 import com.cineclick.service.GeneradorCodigos;
 import com.cineclick.service.MetricasService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +56,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -69,6 +74,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,8 +86,24 @@ class ApiIntegrationTests {
     @LocalServerPort
     private int port;
 
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    private Long adminId;
+
     // El cliente por defecto no soporta PATCH (lo usamos para cancelar compras)
     private final TestRestTemplate restTemplate = new TestRestTemplate(
+        new RestTemplateBuilder()
+            .requestFactory(() -> new JdkClientHttpRequestFactory())
+            .additionalInterceptors((pedido, cuerpo, ejecucion) -> {
+                if (!pedido.getHeaders().containsKey("X-Usuario-Id")) {
+                    pedido.getHeaders().set("X-Usuario-Id", String.valueOf(idAdmin()));
+                }
+                return ejecucion.execute(pedido, cuerpo);
+            })
+    );
+
+    private final TestRestTemplate sinSesion = new TestRestTemplate(
         new RestTemplateBuilder().requestFactory(() -> new JdkClientHttpRequestFactory())
     );
 
@@ -429,10 +451,54 @@ class ApiIntegrationTests {
 
         assertThat(restTemplate.exchange(url(ruta), HttpMethod.GET, conUsuario(cliente.usuarioId()), String.class).getStatusCode())
             .isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(restTemplate.getForEntity(url(ruta), String.class).getStatusCode())
+        assertThat(sinSesion.getForEntity(url(ruta), String.class).getStatusCode())
             .isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(restTemplate.exchange(url(ruta), HttpMethod.GET, conUsuario(idAdmin()), String.class).getStatusCode())
             .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void lasContrasenasSeGuardanConHashYElLoginLasCompara() {
+        String email = "hash-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+
+        String guardada = usuarioRepository.findByEmailIgnoreCase(email).orElseThrow().getPassword();
+        assertThat(guardada).startsWith("$2").doesNotContain("1234");
+        assertThat(restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, "1234"), LoginResponseDTO.class).getStatusCode())
+            .isEqualTo(HttpStatus.OK);
+        assertThat(restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, "12345"), String.class).getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void losEndpointsDeAdministracionRechazanAQuienNoEsAdmin() {
+        ClienteResponseDTO cliente = crearCliente("no-admin-" + UUID.randomUUID() + "@mail.com");
+        HttpHeaders comoCliente = new HttpHeaders();
+        comoCliente.setContentType(MediaType.APPLICATION_JSON);
+        comoCliente.set("X-Usuario-Id", String.valueOf(cliente.usuarioId()));
+        HttpHeaders anonimo = new HttpHeaders();
+        anonimo.setContentType(MediaType.APPLICATION_JSON);
+        LocalDate hoy = LocalDate.now(MetricasService.ZONA);
+        List<Map.Entry<HttpMethod, String>> endpoints = List.of(
+            Map.entry(HttpMethod.POST, "/api/cines"),
+            Map.entry(HttpMethod.PATCH, "/api/salas/999999/estado"),
+            Map.entry(HttpMethod.POST, "/api/peliculas"),
+            Map.entry(HttpMethod.POST, "/api/funciones"),
+            Map.entry(HttpMethod.POST, "/api/promociones"),
+            Map.entry(HttpMethod.GET, "/api/admin/compras"),
+            Map.entry(HttpMethod.POST, "/api/entradas/ABCDEFGH/validar"),
+            Map.entry(HttpMethod.GET, "/api/admin/metricas?desde=" + hoy + "&hasta=" + hoy),
+            Map.entry(HttpMethod.GET, "/api/admin/arrepentimientos"),
+            Map.entry(HttpMethod.GET, "/api/admin/soporte")
+        );
+        for (Map.Entry<HttpMethod, String> endpoint : endpoints) {
+            for (HttpHeaders headers : List.of(comoCliente, anonimo)) {
+                ResponseEntity<String> respuesta = sinSesion.exchange(
+                    url(endpoint.getValue()), endpoint.getKey(), new HttpEntity<>("{}", headers), String.class
+                );
+                assertThat(respuesta.getStatusCode()).as(endpoint.getKey() + " " + endpoint.getValue()).isEqualTo(HttpStatus.FORBIDDEN);
+            }
+        }
     }
 
     // Cine nuevo con dos salas (100 y 50 butacas) y una funcion en cada una el proximo sabado a las 18
@@ -691,6 +757,44 @@ class ApiIntegrationTests {
         assertThat(promocion(codigo).usosActuales()).isZero();
     }
 
+    @Test
+    void elAdminBuscaComprasConFiltrosYVeElDetalle() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(), null, null, false, null, null);
+        CompraResponseDTO conPromo = reservarConPromocion(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL), codigo);
+        pagar(conPromo.id());
+        restTemplate.postForObject(url("/api/arrepentimientos"),
+            new ArrepentimientoRequestDTO(fx.email(), String.valueOf(conPromo.id()), "Ana Prueba", null, true), ArrepentimientoResponseDTO.class);
+        Long otra = venderEntradas(fx, fx.funcionChica(), 0, 2, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA).minusHours(1));
+
+        PaginaDTO<CompraAdminDTO> porEmail = buscarComprasAdmin("email=" + fx.email().toUpperCase());
+        assertThat(porEmail.contenido()).extracting(CompraAdminDTO::id).contains(conPromo.id(), otra);
+
+        String codigoEntrada = conPromo.entradas().get(0).codigoQr();
+        PaginaDTO<CompraAdminDTO> porEntrada = buscarComprasAdmin("codigo=" + codigoEntrada.substring(0, 4) + "-" + codigoEntrada.substring(4));
+        assertThat(porEntrada.contenido()).extracting(CompraAdminDTO::id).containsExactly(conPromo.id());
+
+        PaginaDTO<CompraAdminDTO> arrepentidas = buscarComprasAdmin("cineId=" + fx.cineId() + "&estado=ARREPENTIDA");
+        assertThat(arrepentidas.contenido()).extracting(CompraAdminDTO::id).containsExactly(conPromo.id());
+
+        PaginaDTO<CompraAdminDTO> paginada = buscarComprasAdmin("cineId=" + fx.cineId() + "&tamano=1&pagina=1");
+        assertThat(paginada.contenido()).hasSize(1);
+        assertThat(paginada.totalElementos()).isEqualTo(2);
+
+        DetalleCompraAdminDTO detalle = restTemplate.getForObject(url("/api/admin/compras/" + conPromo.id()), DetalleCompraAdminDTO.class);
+        assertThat(detalle.promocion().codigo()).isEqualTo(codigo);
+        assertThat(detalle.arrepentimiento()).isNotNull();
+        assertThat(detalle.compra().pago()).isNotNull();
+        assertThat(detalle.clienteEmail()).isEqualTo(fx.email());
+    }
+
+    private PaginaDTO<CompraAdminDTO> buscarComprasAdmin(String filtros) {
+        ResponseEntity<PaginaDTO<CompraAdminDTO>> respuesta = restTemplate.exchange(
+            url("/api/admin/compras?" + filtros), HttpMethod.GET, null, new ParameterizedTypeReference<>() { });
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return respuesta.getBody();
+    }
+
     private record PagoResponseDTOConMetodo(String estado, String metodoPago) {
     }
 
@@ -794,8 +898,10 @@ class ApiIntegrationTests {
     }
 
     private Long idAdmin() {
-        return restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO("admin@cineclick.com", "admin123"), LoginResponseDTO.class)
-            .getBody().usuarioId();
+        if (adminId == null) {
+            adminId = usuarioRepository.findByEmailIgnoreCase("admin@cineclick.com").orElseThrow().getId();
+        }
+        return adminId;
     }
 
     private HttpEntity<Void> conUsuario(Long usuarioId) {
