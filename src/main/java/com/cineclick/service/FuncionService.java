@@ -68,8 +68,8 @@ public class FuncionService {
     private int ventanaHoras;
 
     @Transactional(readOnly = true)
-    public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, LocalDate fecha, FormatoFuncion formato, boolean incluirInactivos) {
-        LocalDateTime desde = fecha == null ? null : fecha.atStartOfDay();
+    public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, LocalDate fecha, LocalDate desdeFecha, FormatoFuncion formato, boolean incluirInactivos) {
+        LocalDateTime desde = fecha != null ? fecha.atStartOfDay() : desdeFecha == null ? null : desdeFecha.atStartOfDay();
         LocalDateTime hasta = fecha == null ? null : fecha.plusDays(1).atStartOfDay();
         return toResponses(funcionRepository.buscarConFiltros(peliculaId, cineId, !incluirInactivos, formato, desde, hasta));
     }

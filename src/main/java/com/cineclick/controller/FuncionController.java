@@ -41,10 +41,11 @@ public class FuncionController {
         @RequestParam(required = false) Long peliculaId,
         @RequestParam(required = false) Long cineId,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
         @RequestParam(required = false) FormatoFuncion formato,
         @RequestParam(defaultValue = "false") boolean incluirInactivos
     ) {
-        return funcionService.listar(peliculaId, cineId, fecha, formato, incluirInactivos);
+        return funcionService.listar(peliculaId, cineId, fecha, desde, formato, incluirInactivos);
     }
 
     @GetMapping("/{id}")
