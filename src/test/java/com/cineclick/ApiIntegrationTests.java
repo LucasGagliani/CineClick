@@ -16,6 +16,8 @@ import com.cineclick.dto.FuncionRequestDTO;
 import com.cineclick.dto.LoginResponseDTO;
 import com.cineclick.dto.MetricasResponseDTO;
 import com.cineclick.dto.SalaRequestDTO;
+import com.cineclick.dto.ValidacionEntradaResponseDTO;
+import com.cineclick.dto.ValidarEntradaRequestDTO;
 import com.cineclick.dto.SalaResponseDTO;
 import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
@@ -41,6 +43,8 @@ import com.cineclick.model.Entrada;
 import com.cineclick.model.EstadoEntrada;
 import com.cineclick.model.EstadoArrepentimiento;
 import com.cineclick.model.MotivoArrepentimiento;
+import com.cineclick.model.MotivoFueraDeHorario;
+import com.cineclick.model.ResultadoValidacion;
 import com.cineclick.model.Provincia;
 import com.cineclick.model.TipoSala;
 import com.cineclick.repository.ButacaRepository;
@@ -51,8 +55,12 @@ import com.cineclick.repository.UsuarioRepository;
 import com.cineclick.service.GeneradorCodigos;
 import com.cineclick.service.MetricasService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -70,6 +78,7 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -85,6 +94,18 @@ class ApiIntegrationTests {
 
     @LocalServerPort
     private int port;
+
+    @TestConfiguration
+    static class RelojDeLosTests {
+        @Bean
+        @Primary
+        RelojDePrueba relojDePrueba() {
+            return new RelojDePrueba(MetricasService.ZONA);
+        }
+    }
+
+    @Autowired
+    private RelojDePrueba reloj;
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -106,6 +127,92 @@ class ApiIntegrationTests {
     private final TestRestTemplate sinSesion = new TestRestTemplate(
         new RestTemplateBuilder().requestFactory(() -> new JdkClientHttpRequestFactory())
     );
+
+    @AfterEach
+    void volverALaHoraReal() {
+        reloj.usarHoraReal();
+    }
+
+    @Test
+    void validarDentroDeLaVentanaMarcaLaEntradaYLaSegundaVezDaYaUsada() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = codigoDeEntrada(venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA)));
+        LocalDateTime inicio = fx.sabado().atTime(18, 0);
+
+        reloj.fijar(inicio.minusMinutes(15));
+        ValidacionEntradaResponseDTO primera = validar(codigo.toLowerCase(), fx.cineId());
+        assertThat(primera.resultado()).isEqualTo(ResultadoValidacion.VALIDA);
+        assertThat(primera.usadaEn()).isEqualTo(inicio.minusMinutes(15));
+        assertThat(primera.salaNombre()).isNotBlank();
+        assertThat(primera.tipo()).isEqualTo(TipoEntrada.GENERAL);
+
+        reloj.fijar(inicio.minusMinutes(5));
+        ValidacionEntradaResponseDTO segunda = validar(codigo, fx.cineId());
+        assertThat(segunda.resultado()).isEqualTo(ResultadoValidacion.YA_USADA);
+        assertThat(segunda.usadaEn()).isEqualTo(inicio.minusMinutes(15));
+    }
+
+    @Test
+    void dosValidacionesSimultaneasDanUnaSolaValida() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = codigoDeEntrada(venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA)));
+        reloj.fijar(fx.sabado().atTime(17, 45));
+
+        List<CompletableFuture<ValidacionEntradaResponseDTO>> pedidos = List.of(
+            CompletableFuture.supplyAsync(() -> validar(codigo, fx.cineId())),
+            CompletableFuture.supplyAsync(() -> validar(codigo, fx.cineId())),
+            CompletableFuture.supplyAsync(() -> validar(codigo, fx.cineId()))
+        );
+        List<ResultadoValidacion> resultados = pedidos.stream().map(CompletableFuture::join).map(ValidacionEntradaResponseDTO::resultado).toList();
+
+        assertThat(resultados).containsOnlyOnce(ResultadoValidacion.VALIDA);
+        assertThat(resultados).filteredOn(r -> r == ResultadoValidacion.YA_USADA).hasSize(2);
+    }
+
+    @Test
+    void unaEntradaDeOtroCineNoSeMarca() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = codigoDeEntrada(venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA)));
+        reloj.fijar(fx.sabado().atTime(17, 30));
+
+        ValidacionEntradaResponseDTO otroCine = validar(codigo, fx.cineId() + 1000);
+        assertThat(otroCine.resultado()).isEqualTo(ResultadoValidacion.OTRO_CINE);
+        assertThat(otroCine.cineNombre()).isNotBlank();
+        assertThat(validar(codigo, fx.cineId()).resultado()).isEqualTo(ResultadoValidacion.VALIDA);
+    }
+
+    @Test
+    void fueraDelHorarioDeIngresoDaElMotivoYNoMarca() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = codigoDeEntrada(venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA)));
+        LocalDateTime inicio = fx.sabado().atTime(18, 0);
+
+        reloj.fijar(inicio.minusMinutes(61));
+        ValidacionEntradaResponseDTO temprano = validar(codigo, fx.cineId());
+        assertThat(temprano.resultado()).isEqualTo(ResultadoValidacion.FUERA_DE_HORARIO);
+        assertThat(temprano.motivo()).isEqualTo(MotivoFueraDeHorario.DEMASIADO_TEMPRANO);
+        assertThat(temprano.ingresoDesde()).isEqualTo(inicio.minusMinutes(60));
+
+        reloj.fijar(inicio.plusMinutes(31));
+        assertThat(validar(codigo, fx.cineId()).motivo()).isEqualTo(MotivoFueraDeHorario.FUNCION_TERMINADA);
+
+        reloj.fijar(fx.sabado().minusDays(1).atTime(LocalTime.of(18, 0)));
+        assertThat(validar(codigo, fx.cineId()).motivo()).isEqualTo(MotivoFueraDeHorario.OTRO_DIA);
+
+        reloj.fijar(inicio.plusMinutes(30));
+        assertThat(validar(codigo, fx.cineId()).resultado()).isEqualTo(ResultadoValidacion.VALIDA);
+    }
+
+    @Test
+    void unaEntradaDeUnaCompraCanceladaEstaAnuladaYUnCodigoInexistenteDa404() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = codigoDeEntrada(venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CANCELADA, LocalDateTime.now(MetricasService.ZONA)));
+        reloj.fijar(fx.sabado().atTime(17, 30));
+
+        assertThat(validar(codigo, fx.cineId()).resultado()).isEqualTo(ResultadoValidacion.ANULADA);
+        assertThat(restTemplate.postForEntity(url("/api/entradas/ZZZZ9999/validar"), new ValidarEntradaRequestDTO(fx.cineId()), String.class).getStatusCode())
+            .isEqualTo(HttpStatus.NOT_FOUND);
+    }
 
     @Test
     void permiteConsultarRecursosConGet() {
@@ -886,6 +993,17 @@ class ApiIntegrationTests {
         }
         compra.setTotal(new BigDecimal(1000L * cantidad));
         return compraRepository.save(compra).getId();
+    }
+
+    private String codigoDeEntrada(Long compraId) {
+        return restTemplate.getForObject(url("/api/compras/" + compraId), CompraResponseDTO.class).entradas().get(0).codigoQr();
+    }
+
+    private ValidacionEntradaResponseDTO validar(String codigo, Long cineId) {
+        ResponseEntity<ValidacionEntradaResponseDTO> respuesta = restTemplate.postForEntity(
+            url("/api/entradas/" + codigo + "/validar"), new ValidarEntradaRequestDTO(cineId), ValidacionEntradaResponseDTO.class);
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return respuesta.getBody();
     }
 
     private MetricasResponseDTO pedirMetricas(LocalDate desde, LocalDate hasta, Long cineId) {
