@@ -1,198 +1,281 @@
-# Requests para probar la API a mano.
-# Los ids asumen una base recien creada (se puede borrar la carpeta data/ y volver a arrancar).
+# Requests para probar la API a mano, con los datos del seed de demo (perfil demo, base recien creada:
+# borrar la carpeta data/ y volver a arrancar).
+#
+# Estan escritos para la extension REST Client de VS Code: "# @name x" guarda la respuesta y {{x.response.body.$.campo}}
+# la usa en los requests siguientes. Correrlos en orden dentro de cada seccion.
+#
+# Ids que deja el seed: usuario 1 = admin; clientes 1 a 4 = Ana, Martin, Sofia y Diego (usuarios 2 a 5);
+# cine 1 = Abasto, 2 = Recoleta, 3 = Palermo, 4 = Nunez.
+
+@base = http://localhost:8080
+@admin = 1
+@hoy = {{$datetime "YYYY-MM-DD"}}
+@manana = {{$datetime "YYYY-MM-DD" 1 d}}
+
+
+# ---------- Auth ----------
 
 ### Login con el admin
-POST http://localhost:8080/api/auth/login
+POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{
-  "email": "admin@cineclick.com",
-  "password": "admin123"
-}
+{ "email": "admin@cineclick.com", "password": "admin123" }
 
-### Login con password incorrecta -> 401
-POST http://localhost:8080/api/auth/login
+### Login con Sofia (cliente sin compras)
+# @name sofia
+POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{
-  "email": "admin@cineclick.com",
-  "password": "cualquiera"
-}
+{ "email": "sofia@cineclick.com", "password": "sofia123" }
+
+### Password incorrecta -> 401
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "admin@cineclick.com", "password": "cualquiera" }
 
 
-# ---------- Peliculas ----------
+# ---------- Catalogo (publico) ----------
 
-### Listar peliculas
-GET http://localhost:8080/api/peliculas
+### Peliculas en cartelera
+GET {{base}}/api/peliculas
+
+### Destacadas del slider y proximos estrenos
+GET {{base}}/api/peliculas/destacadas
+
+###
+GET {{base}}/api/peliculas/proximos-estrenos
 
 ### Pelicula que no existe -> 404
-GET http://localhost:8080/api/peliculas/999999
+GET {{base}}/api/peliculas/999999
 
-### Id que no es un numero -> 400
-GET http://localhost:8080/api/peliculas/abc
+### Cines con sus salas
+GET {{base}}/api/cines
 
-### Crear pelicula (queda con id 3)
-POST http://localhost:8080/api/peliculas
+### Funciones de manana en Abasto (filtros: peliculaId, cineId, fecha, formato)
+# @name funcionesManana
+GET {{base}}/api/funciones?cineId=1&fecha={{manana}}
+
+### Butacas de la primera funcion de manana
+# @name butacas
+GET {{base}}/api/funciones/{{funcionesManana.response.body.$[0].id}}/butacas-disponibles
+
+### Precios por tipo de entrada
+GET {{base}}/api/funciones/{{funcionesManana.response.body.$[0].id}}/precios
+
+### Doble funcion: que mas se puede ver ese dia
+GET {{base}}/api/funciones/{{funcionesManana.response.body.$[0].id}}/combinables
+
+
+# ---------- Promociones ----------
+
+### Vigentes (publico). Con X-Usuario-Id de un cliente dice si la puede usar y por que no
+GET {{base}}/api/promociones/vigentes
+X-Usuario-Id: 2
+
+### Todas, con su estado y usos (admin)
+GET {{base}}/api/promociones
+X-Usuario-Id: {{admin}}
+
+
+# ---------- Compra completa con BIENVENIDA (Sofia) ----------
+
+### Reservar 2 butacas con BIENVENIDA: la primera entrada sale gratis. La reserva dura 8 minutos
+# (si alguna de las dos butacas ya estaba vendida responde 409: usar otros ids de la lista con "disponible": true)
+# @name reserva
+POST {{base}}/api/compras
 Content-Type: application/json
 
 {
-  "titulo": "Matrix",
-  "sinopsis": "Un programador descubre que la realidad es una simulacion.",
-  "duracionMinutos": 136,
-  "clasificacion": "MAS_13",
-  "genero": "CIENCIA_FICCION",
-  "idioma": "SUBTITULADA",
-  "formatosDisponibles": ["DOS_D", "IMAX"],
-  "urlPoster": "https://example.com/matrix.jpg",
-  "fechaEstreno": "1999-03-31"
+  "clienteId": {{sofia.response.body.$.clienteId}},
+  "funcionId": {{funcionesManana.response.body.$[0].id}},
+  "butacasIds": [{{butacas.response.body.$[0].id}}, {{butacas.response.body.$[1].id}}],
+  "entradas": [{ "tipo": "GENERAL", "cantidad": 2 }],
+  "codigoPromocion": "BIENVENIDA"
 }
 
-### JSON mal escrito -> 400
-POST http://localhost:8080/api/peliculas
-Content-Type: application/json
-
-{ "titulo": "Matrix",
-
-### Modificar la pelicula
-PUT http://localhost:8080/api/peliculas/3
-Content-Type: application/json
-
-{
-  "titulo": "Matrix Recargado",
-  "sinopsis": "Neo y la resistencia siguen peleando contra las maquinas.",
-  "duracionMinutos": 138,
-  "clasificacion": "MAS_13",
-  "genero": "CIENCIA_FICCION",
-  "idioma": "SUBTITULADA",
-  "formatosDisponibles": ["DOS_D", "IMAX"],
-  "urlPoster": "https://example.com/matrix.jpg",
-  "fechaEstreno": "2003-05-15"
-}
-
-### Borrar la pelicula (no tiene funciones, asi que se borra; con funciones daria 409)
-DELETE http://localhost:8080/api/peliculas/3
-
-
-# ---------- Clientes ----------
-
-### Registrar cliente (queda con id 1)
-POST http://localhost:8080/api/clientes
-Content-Type: application/json
-
-{
-  "nombre": "Lucas",
-  "apellido": "Perez",
-  "email": "lucas@example.com",
-  "password": "1234",
-  "telefono": "1122334455"
-}
-
-### Cliente con datos invalidos -> 400 con el detalle de cada campo
-POST http://localhost:8080/api/clientes
-Content-Type: application/json
-
-{
-  "nombre": "",
-  "apellido": "",
-  "email": "esto-no-es-un-email",
-  "password": "1234"
-}
-
-### Mismo email de nuevo -> 409
-POST http://localhost:8080/api/clientes
-Content-Type: application/json
-
-{
-  "nombre": "Otro",
-  "apellido": "Lucas",
-  "email": "lucas@example.com",
-  "password": "1234"
-}
-
-
-# ---------- Funciones y compras ----------
-
-### Ver funciones (se pueden filtrar: ?peliculaId=2&fecha=2026-09-25&formato=DOS_D)
-GET http://localhost:8080/api/funciones
-
-### Butacas de la funcion 2 (los ids dependen de la programacion del dia)
-GET http://localhost:8080/api/funciones/2/butacas-disponibles
-
-### Precios por tipo de entrada de la funcion 2
-GET http://localhost:8080/api/funciones/2/precios
-
-### Reservar dos butacas (una general y una de menor) con la promo. Queda como compra 1 y dura 8 minutos
-POST http://localhost:8080/api/compras
+### Otra vez las mismas butacas -> 409
+POST {{base}}/api/compras
 Content-Type: application/json
 
 {
   "clienteId": 1,
-  "funcionId": 2,
-  "butacasIds": [1, 2],
-  "entradas": [{ "tipo": "GENERAL", "cantidad": 1 }, { "tipo": "MENOR", "cantidad": 1 }],
-  "codigoPromocion": "ESTRENO10"
-}
-
-### La cantidad de entradas no coincide con las butacas -> 400
-POST http://localhost:8080/api/compras
-Content-Type: application/json
-
-{
-  "clienteId": 1,
-  "funcionId": 2,
-  "butacasIds": [3, 4],
-  "entradas": [{ "tipo": "GENERAL", "cantidad": 3 }]
-}
-
-### Intentar comprar otra vez la A1 -> 409, ya esta vendida
-POST http://localhost:8080/api/compras
-Content-Type: application/json
-
-{
-  "clienteId": 1,
-  "funcionId": 2,
-  "butacasIds": [1],
+  "funcionId": {{funcionesManana.response.body.$[0].id}},
+  "butacasIds": [{{butacas.response.body.$[0].id}}],
   "entradas": [{ "tipo": "GENERAL", "cantidad": 1 }]
 }
 
-### Pagar la compra 1
-POST http://localhost:8080/api/compras/1/pagos
-Content-Type: application/json
-
-{
-  "metodoPago": "TARJETA_CREDITO",
-  "marca": "Visa",
-  "ultimos4": "1111",
-  "aceptaTerminos": true
-}
-
-### Ver la compra (ahora CONFIRMADA)
-GET http://localhost:8080/api/compras/1
-
-### Cancelar la compra
-PATCH http://localhost:8080/api/compras/1/cancelar
-
-### Despues de cancelar, la A1 se puede volver a comprar (queda como compra 2)
-POST http://localhost:8080/api/compras
-Content-Type: application/json
-
-{
-  "clienteId": 1,
-  "funcionId": 2,
-  "butacasIds": [1],
-  "entradas": [{ "tipo": "JUBILADO", "cantidad": 1 }]
-}
-
 ### Pago rechazado (la tarjeta terminada en 0002 siempre se rechaza; se puede reintentar)
-POST http://localhost:8080/api/compras/2/pagos
+POST {{base}}/api/compras/{{reserva.response.body.$.id}}/pagos
+Content-Type: application/json
+
+{ "metodoPago": "TARJETA_CREDITO", "marca": "Visa", "ultimos4": "0002", "aceptaTerminos": true }
+
+### Pagar
+POST {{base}}/api/compras/{{reserva.response.body.$.id}}/pagos
+Content-Type: application/json
+
+{ "metodoPago": "TARJETA_CREDITO", "marca": "Visa", "ultimos4": "1111", "aceptaTerminos": true }
+
+### Ver la compra (CONFIRMADA, con el descuento en la primera entrada)
+# @name compraSofia
+GET {{base}}/api/compras/{{reserva.response.body.$.id}}
+
+### Compras de Sofia
+GET {{base}}/api/clientes/{{sofia.response.body.$.clienteId}}/compras
+
+
+# ---------- Arrepentimiento y soporte (publicos) ----------
+
+### Buscar la compra con el email y el numero de compra (o el codigo de una entrada)
+GET {{base}}/api/compras/buscar?email=sofia@cineclick.com&codigo={{reserva.response.body.$.id}}
+
+### Email que no coincide -> 404 (el mismo error que un codigo inexistente)
+GET {{base}}/api/compras/buscar?email=nadie@correo.example&codigo={{reserva.response.body.$.id}}
+
+### Arrepentirse: en plazo anula las entradas y devuelve el uso de BIENVENIDA (ARR-XXXXXXXX)
+POST {{base}}/api/arrepentimientos
 Content-Type: application/json
 
 {
-  "metodoPago": "TARJETA_CREDITO",
-  "marca": "Visa",
-  "ultimos4": "0002",
-  "aceptaTerminos": true
+  "email": "sofia@cineclick.com",
+  "codigo": "{{reserva.response.body.$.id}}",
+  "nombre": "Sofia Ramirez",
+  "motivo": "NO_PUEDO_ASISTIR",
+  "confirmaAnulacion": true
 }
 
-### Compras del cliente
-GET http://localhost:8080/api/clientes/1/compras
+### Consulta de soporte (SOP-XXXXXXXX). Repetirla con la misma claveIdempotencia no la duplica
+POST {{base}}/api/soporte
+Content-Type: application/json
+
+{
+  "nombre": "Ana Gomez",
+  "email": "ana@cineclick.com",
+  "motivo": "PROBLEMA_COMPRA",
+  "codigo": null,
+  "mensaje": "No encuentro el QR de mis entradas en el mail. Donde lo puedo ver?",
+  "claveIdempotencia": "6f1c1a52-8a0b-4d7e-9a43-demo00000001"
+}
+
+### Mensaje corto y email invalido -> 400 con el detalle de cada campo
+POST {{base}}/api/soporte
+Content-Type: application/json
+
+{ "nombre": "A", "email": "mal", "motivo": "OTRO", "mensaje": "corto" }
+
+
+# ---------- Administracion (X-Usuario-Id de un admin) ----------
+
+### Sin el encabezado -> 403
+GET {{base}}/api/admin/compras
+
+### Compras de hoy en Abasto, confirmadas, de a 5
+# @name comprasHoy
+GET {{base}}/api/admin/compras?cineId=1&estado=CONFIRMADA&desde={{hoy}}&tamano=5
+X-Usuario-Id: {{admin}}
+
+### Buscar por email (parcial) o por codigo de entrada (con o sin guion)
+GET {{base}}/api/admin/compras?email=ana@
+X-Usuario-Id: {{admin}}
+
+### Detalle de una compra: funcion, entradas, pago, promocion, arrepentimiento y soporte
+# @name detalle
+GET {{base}}/api/admin/compras/{{compraSofia.response.body.$.id}}
+X-Usuario-Id: {{admin}}
+
+### Metricas de los ultimos dias
+GET {{base}}/api/admin/metricas?desde={{$datetime "YYYY-MM-DD" -7 d}}&hasta={{hoy}}
+X-Usuario-Id: {{admin}}
+
+### Solicitudes de arrepentimiento (la de Ana quedo FUERA_DE_PLAZO, para revisar)
+# @name arrepentimientos
+GET {{base}}/api/admin/arrepentimientos
+X-Usuario-Id: {{admin}}
+
+### Rechazar la primera de la lista (si esta FUERA_DE_PLAZO; si no, 400)
+PATCH {{base}}/api/admin/arrepentimientos/{{arrepentimientos.response.body.$[0].id}}/rechazar
+X-Usuario-Id: {{admin}}
+
+### Consultas de soporte abiertas
+# @name consultas
+GET {{base}}/api/admin/soporte?estado=ABIERTA
+X-Usuario-Id: {{admin}}
+
+### Marcar como resuelta la primera
+PATCH {{base}}/api/admin/soporte/{{consultas.response.body.$[0].id}}/resolver
+X-Usuario-Id: {{admin}}
+
+### Crear una funcion con un horario que no termina en 0 o 5 -> 400
+POST {{base}}/api/funciones
+Content-Type: application/json
+X-Usuario-Id: {{admin}}
+
+{
+  "peliculaId": {{funcionesManana.response.body.$[0].peliculaId}},
+  "salaId": {{funcionesManana.response.body.$[0].salaId}},
+  "fechaHoraInicio": "{{manana}}T09:32:00",
+  "precioBase": 4200,
+  "formato": "{{funcionesManana.response.body.$[0].formato}}",
+  "idioma": "SUBTITULADA"
+}
+
+### Crear una promocion (admin)
+POST {{base}}/api/promociones
+Content-Type: application/json
+X-Usuario-Id: {{admin}}
+
+{
+  "codigo": "FINDE15",
+  "titulo": "Fin de semana",
+  "descripcion": null,
+  "porcentajeDescuento": 15,
+  "vigenciaDesde": "{{hoy}}T00:00:00",
+  "vigenciaHasta": "{{manana}}T23:59:59",
+  "diasSemana": ["SATURDAY", "SUNDAY"],
+  "usosMaximosTotales": 100,
+  "usosMaximosPorUsuario": 2,
+  "soloPrimeraCompra": false,
+  "maxEntradasConDescuento": 4,
+  "montoMaximoDescuento": null,
+  "activa": true
+}
+
+
+# ---------- Validacion de entradas (admin) ----------
+# El cuerpo lleva solo el cine del puesto. Resultados: VALIDA, YA_USADA, OTRO_CINE, FUERA_DE_HORARIO
+# (con motivo) o ANULADA; 404 si el codigo no existe. Para un VALIDA hace falta una funcion de hoy
+# en la ventana de ingreso (60 min antes a 30 despues): el seed deja entradas de hoy en cada cine.
+
+### Una entrada de hoy en Abasto: VALIDA si su funcion esta en la ventana; si no, FUERA_DE_HORARIO
+# @name detalleHoy
+GET {{base}}/api/admin/compras/{{comprasHoy.response.body.$.contenido[0].id}}
+X-Usuario-Id: {{admin}}
+
+###
+POST {{base}}/api/entradas/{{detalleHoy.response.body.$.compra.entradas[0].codigoQr}}/validar
+Content-Type: application/json
+X-Usuario-Id: {{admin}}
+
+{ "cineId": 1 }
+
+### La misma entrada validada desde Recoleta -> OTRO_CINE (no la marca)
+POST {{base}}/api/entradas/{{detalleHoy.response.body.$.compra.entradas[0].codigoQr}}/validar
+Content-Type: application/json
+X-Usuario-Id: {{admin}}
+
+{ "cineId": 2 }
+
+### Una entrada de la compra que Sofia anulo -> ANULADA
+POST {{base}}/api/entradas/{{detalle.response.body.$.compra.entradas[0].codigoQr}}/validar
+Content-Type: application/json
+X-Usuario-Id: {{admin}}
+
+{ "cineId": 1 }
+
+### Codigo que no existe -> 404
+POST {{base}}/api/entradas/ZZZZ9999/validar
+Content-Type: application/json
+X-Usuario-Id: {{admin}}
+
+{ "cineId": 1 }
