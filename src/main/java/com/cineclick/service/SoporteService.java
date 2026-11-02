@@ -61,7 +61,7 @@ public class SoporteService {
         return toResponse(consulta);
     }
 
-    private static SoporteResponseDTO toResponse(ConsultaSoporte consulta) {
+    public static SoporteResponseDTO toResponse(ConsultaSoporte consulta) {
         return new SoporteResponseDTO(
             consulta.getId(),
             consulta.getNumero(),

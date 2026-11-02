@@ -95,7 +95,7 @@ public class ArrepentimientoService {
         return solicitud;
     }
 
-    private static ArrepentimientoResponseDTO toResponse(SolicitudArrepentimiento solicitud) {
+    public static ArrepentimientoResponseDTO toResponse(SolicitudArrepentimiento solicitud) {
         return new ArrepentimientoResponseDTO(
             solicitud.getId(),
             solicitud.getCodigo(),

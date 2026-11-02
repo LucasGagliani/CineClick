@@ -2,6 +2,8 @@ package com.cineclick.repository;
 
 import com.cineclick.model.Compra;
 import com.cineclick.model.EstadoCompra;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -55,4 +57,31 @@ public interface CompraRepository extends JpaRepository<Compra, Long> {
     List<Compra> findByEstadoAndFechaCompraBefore(EstadoCompra estado, LocalDateTime limite);
 
     List<Compra> findByFuncionIdAndEstadoAndFechaCompraBefore(Long funcionId, EstadoCompra estado, LocalDateTime limite);
+
+    @Query(value = "select c from Compra c "
+        + "where (:compraId is null or c.id = :compraId) "
+        + "and (:codigoEntrada is null or exists (select e from Entrada e where e.compra = c and e.codigoQr = :codigoEntrada)) "
+        + "and (:email is null or lower(c.cliente.usuario.email) like :email) "
+        + "and (:cineId is null or c.funcion.sala.cine.id = :cineId) "
+        + "and (:estado is null or c.estado = :estado) "
+        + "and (:desde is null or c.fechaCompra >= :desde) "
+        + "and (:hasta is null or c.fechaCompra < :hasta)",
+        countQuery = "select count(c) from Compra c "
+        + "where (:compraId is null or c.id = :compraId) "
+        + "and (:codigoEntrada is null or exists (select e from Entrada e where e.compra = c and e.codigoQr = :codigoEntrada)) "
+        + "and (:email is null or lower(c.cliente.usuario.email) like :email) "
+        + "and (:cineId is null or c.funcion.sala.cine.id = :cineId) "
+        + "and (:estado is null or c.estado = :estado) "
+        + "and (:desde is null or c.fechaCompra >= :desde) "
+        + "and (:hasta is null or c.fechaCompra < :hasta)")
+    Page<Compra> buscarParaAdmin(
+        @Param("compraId") Long compraId,
+        @Param("codigoEntrada") String codigoEntrada,
+        @Param("email") String email,
+        @Param("cineId") Long cineId,
+        @Param("estado") EstadoCompra estado,
+        @Param("desde") LocalDateTime desde,
+        @Param("hasta") LocalDateTime hasta,
+        Pageable pageable
+    );
 }

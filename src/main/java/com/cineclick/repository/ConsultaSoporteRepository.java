@@ -16,4 +16,6 @@ public interface ConsultaSoporteRepository extends JpaRepository<ConsultaSoporte
     List<ConsultaSoporte> findAllByOrderByFechaDesc();
 
     List<ConsultaSoporte> findByEstadoOrderByFechaDesc(EstadoConsulta estado);
+
+    List<ConsultaSoporte> findByCompraIdOrderByFechaDesc(Long compraId);
 }
