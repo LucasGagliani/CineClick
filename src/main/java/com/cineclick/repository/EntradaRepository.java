@@ -55,7 +55,10 @@ public interface EntradaRepository extends JpaRepository<Entrada, Long> {
     List<Object[]> vendidasYUsadasPorFuncion(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta, @Param("cineId") Long cineId);
 
     @Modifying
-    @Query("update Entrada e set e.estado = com.cineclick.model.EstadoEntrada.USADA "
-        + "where e.id = :id and e.funcion.id = :funcionId and e.estado = com.cineclick.model.EstadoEntrada.EMITIDA")
-    int marcarUsadaSiEstaEmitida(@Param("id") Long id, @Param("funcionId") Long funcionId);
+    @Query("update Entrada e set e.estado = com.cineclick.model.EstadoEntrada.USADA, e.usadaEn = :ahora "
+        + "where e.id = :id and e.estado = com.cineclick.model.EstadoEntrada.EMITIDA")
+    int marcarUsadaSiEstaEmitida(@Param("id") Long id, @Param("ahora") LocalDateTime ahora);
+
+    @Query("select e.usadaEn from Entrada e where e.id = :id")
+    Optional<LocalDateTime> usadaEn(@Param("id") Long id);
 }

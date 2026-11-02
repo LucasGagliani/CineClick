@@ -24,6 +24,6 @@ public class EntradaController {
     @SoloAdmin
     @PostMapping("/{codigo}/validar")
     public ValidacionEntradaResponseDTO validar(@PathVariable String codigo, @Valid @RequestBody ValidarEntradaRequestDTO dto) {
-        return entradaService.validar(codigo, dto.funcionId());
+        return entradaService.validar(codigo, dto.cineId());
     }
 }

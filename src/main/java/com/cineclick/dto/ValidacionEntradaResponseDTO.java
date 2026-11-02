@@ -1,17 +1,24 @@
 package com.cineclick.dto;
 
+import com.cineclick.model.MotivoFueraDeHorario;
 import com.cineclick.model.ResultadoValidacion;
+import com.cineclick.model.TipoEntrada;
 
 import java.time.LocalDateTime;
 
 public record ValidacionEntradaResponseDTO(
     ResultadoValidacion resultado,
+    MotivoFueraDeHorario motivo,
     String codigo,
-    Long funcionId,
     String peliculaTitulo,
+    Long cineId,
     String cineNombre,
     String salaNombre,
+    String codigoButaca,
     LocalDateTime fechaHoraInicio,
-    String codigoButaca
+    TipoEntrada tipo,
+    LocalDateTime usadaEn,
+    LocalDateTime ingresoDesde,
+    LocalDateTime ingresoHasta
 ) {
 }

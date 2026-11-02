@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -50,6 +51,9 @@ public class Entrada {
     @Column
     private Boolean vigente = Boolean.TRUE;
 
+    @Column
+    private LocalDateTime usadaEn;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "compra_id", nullable = false)
     private Compra compra;
@@ -62,8 +66,9 @@ public class Entrada {
     @JoinColumn(name = "butaca_id", nullable = false)
     private Butaca butaca;
 
-    public void marcarUsada() {
+    public void marcarUsada(LocalDateTime cuando) {
         estado = EstadoEntrada.USADA;
+        usadaEn = cuando;
     }
 
     public void cancelar() {
