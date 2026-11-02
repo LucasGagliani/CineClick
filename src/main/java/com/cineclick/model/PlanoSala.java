@@ -4,6 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 public enum PlanoSala {
+    GRANDE(
+        "DDooo.oooooooooooo.oooDD",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo",
+        "ooooo.oooooooooooo.ooooo"
+    ),
     CLASICA(
         "DD..oooooooooo..DD",
         "ooo.oooooooooo.ooo",
@@ -37,6 +50,15 @@ public enum PlanoSala {
         "ooooo.oooooooooo.ooooo",
         "ooooo.oooooooooo.ooooo",
         "DDooo.oooooooooo.oooDD"
+    ),
+    CHICA(
+        "DDo.oooooo.oDD",
+        "ooo.oooooo.ooo",
+        "ooo.oooooo.ooo",
+        "ooo.oooooo.ooo",
+        "ooo.oooooo.ooo",
+        "ooo.oooooo.ooo",
+        "ooo.oooooo.ooo"
     ),
     PREMIUM(
         "DD.oooooo.DD",
@@ -91,6 +113,7 @@ public enum PlanoSala {
             case IMAX -> IMAX;
             case PREMIUM -> PREMIUM;
             case CUATRO_D -> CUATRO_D;
+            case TRES_D -> ESTADIO;
             case TRADICIONAL -> (sala.getCine().getId() + sala.getNumero()) % 2 == 0 ? CLASICA : ESTADIO;
         };
     }

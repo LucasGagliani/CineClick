@@ -3,7 +3,12 @@ package com.cineclick.config;
 import com.cineclick.model.BarriosCaba;
 import com.cineclick.model.Clasificacion;
 import com.cineclick.model.Idioma;
+import com.cineclick.model.PlanoSala;
 import com.cineclick.model.Provincia;
+import com.cineclick.model.Sala;
+import com.cineclick.repository.ButacaRepository;
+import com.cineclick.repository.EntradaRepository;
+import com.cineclick.repository.SalaRepository;
 import com.cineclick.service.Normalizador;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -34,6 +39,9 @@ public class MigracionDatos implements ApplicationRunner {
 
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
+    private final SalaRepository salaRepository;
+    private final ButacaRepository butacaRepository;
+    private final EntradaRepository entradaRepository;
 
     @Override
     @Transactional
@@ -47,6 +55,19 @@ public class MigracionDatos implements ApplicationRunner {
         pasarEnumAVarchar("pagos", "metodo_pago");
         migrarVigenciaDePromociones();
         cifrarContrasenas();
+        pasarEnumAVarchar("salas", "tipo");
+        jdbcTemplate.execute("ALTER TABLE entradas DROP CONSTRAINT IF EXISTS uk_entrada_funcion_butaca");
+        redistribuirSalasSinPlano();
+    }
+
+    private void redistribuirSalasSinPlano() {
+        for (Sala sala : salaRepository.findAll()) {
+            if (butacaRepository.existsBySalaIdAndColumnaIsNotNull(sala.getId()) || entradaRepository.existsByButacaSalaId(sala.getId())) {
+                continue;
+            }
+            butacaRepository.borrarPorSala(sala.getId());
+            butacaRepository.saveAll(PlanoSala.sugeridoPara(sala).crearButacas(sala));
+        }
     }
 
     private void cifrarContrasenas() {
