@@ -151,7 +151,9 @@ public class GeneradorDeCompras {
 
         Funcion agotada = visibles.stream()
             .filter(f -> f.getFechaHoraInicio().toLocalDate().equals(hoy) && f.getFechaHoraInicio().isAfter(ahora.plusMinutes(90)))
-            .min(Comparator.comparingInt((Funcion f) -> capacidad(f)).thenComparing(f -> Math.abs(f.getFechaHoraInicio().getHour() - 21)))
+            .min(Comparator.comparingLong((Funcion f) -> anterioresDeLaMismaPelicula(f, visibles))
+                .thenComparingInt(this::capacidad)
+                .thenComparing(Funcion::getFechaHoraInicio))
             .orElse(visibles.stream().min(Comparator.comparingInt(this::capacidad)).orElse(null));
         if (agotada != null) {
             llenar(agotada, 1.0, pool);
@@ -170,6 +172,12 @@ public class GeneradorDeCompras {
         for (Funcion funcion : medias.subList(0, Math.min(8, medias.size()))) {
             llenar(funcion, 0.2 + azar.nextDouble() * 0.5, pool);
         }
+    }
+
+    private long anterioresDeLaMismaPelicula(Funcion funcion, List<Funcion> visibles) {
+        return visibles.stream()
+            .filter(f -> f.getPelicula().equals(funcion.getPelicula()) && f.getFechaHoraInicio().isBefore(funcion.getFechaHoraInicio()))
+            .count();
     }
 
     private void llenar(Funcion funcion, double ocupacion, List<Cliente> pool) {
