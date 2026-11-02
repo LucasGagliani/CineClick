@@ -1,6 +1,7 @@
 package com.cineclick.controller;
 
 import com.cineclick.dto.ButacaResponseDTO;
+import com.cineclick.dto.CombinablesResponseDTO;
 import com.cineclick.dto.FuncionRequestDTO;
 import com.cineclick.dto.FuncionResponseDTO;
 import com.cineclick.dto.PrecioEntradaDTO;
@@ -75,6 +76,11 @@ public class FuncionController {
     @GetMapping("/{id}/butacas-disponibles")
     public List<ButacaResponseDTO> obtenerButacasDisponibles(@PathVariable Long id) {
         return funcionService.obtenerButacasDisponibles(id);
+    }
+
+    @GetMapping("/{id}/combinables")
+    public CombinablesResponseDTO combinables(@PathVariable Long id) {
+        return funcionService.combinables(id);
     }
 
     @GetMapping("/{id}/precios")

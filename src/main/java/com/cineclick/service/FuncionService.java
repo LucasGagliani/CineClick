@@ -1,6 +1,7 @@
 package com.cineclick.service;
 
 import com.cineclick.dto.ButacaResponseDTO;
+import com.cineclick.dto.CombinablesResponseDTO;
 import com.cineclick.dto.DtoMapper;
 import com.cineclick.dto.FuncionRequestDTO;
 import com.cineclick.dto.FuncionResponseDTO;
@@ -29,10 +30,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,11 +58,82 @@ public class FuncionService {
     @Value("${cineclick.funciones.minutos-limpieza:20}")
     private int minutosLimpieza;
 
+    @Value("${cineclick.funciones.minutos-publicidad:15}")
+    private int minutosPublicidad;
+
+    @Value("${cineclick.combinables.margen-minutos:10}")
+    private int margenMinutos;
+
+    @Value("${cineclick.combinables.ventana-horas:3}")
+    private int ventanaHoras;
+
     @Transactional(readOnly = true)
     public List<FuncionResponseDTO> listar(Long peliculaId, Long cineId, LocalDate fecha, FormatoFuncion formato, boolean incluirInactivos) {
         LocalDateTime desde = fecha == null ? null : fecha.atStartOfDay();
         LocalDateTime hasta = fecha == null ? null : fecha.plusDays(1).atStartOfDay();
         return toResponses(funcionRepository.buscarConFiltros(peliculaId, cineId, !incluirInactivos, formato, desde, hasta));
+    }
+
+    // Funciones del mismo cine y dia, de otras peliculas y con butacas libres, que terminan antes del inicio
+    // de la elegida o empiezan despues de su fin, con al menos el margen y dentro de la ventana. El fin es
+    // estimado: inicio + duracion + publicidad (el horario publicado incluye la tanda previa).
+    @Transactional(readOnly = true)
+    public CombinablesResponseDTO combinables(Long id) {
+        Funcion elegida = buscarEntidad(id);
+        LocalDateTime inicioElegida = elegida.getFechaHoraInicio();
+        LocalDateTime finElegida = finEstimado(elegida);
+        LocalDate dia = inicioElegida.toLocalDate();
+        LocalDateTime ahora = LocalDateTime.now();
+        List<Funcion> candidatas = funcionRepository.buscarConFiltros(
+                null, elegida.getSala().getCine().getId(), true, null, dia.atStartOfDay(), dia.plusDays(1).atStartOfDay()
+            ).stream()
+            .filter(f -> f.getEstado() == EstadoFuncion.PROGRAMADA)
+            .filter(f -> !f.getPelicula().getId().equals(elegida.getPelicula().getId()))
+            .filter(f -> f.getFechaHoraInicio().isAfter(ahora))
+            .toList();
+        Map<Long, Integer> libres = toResponses(candidatas).stream()
+            .collect(Collectors.toMap(FuncionResponseDTO::id, FuncionResponseDTO::butacasLibres));
+        long ventana = ventanaHoras * 60L;
+        List<CombinablesResponseDTO.Combinable> antes = new ArrayList<>();
+        List<CombinablesResponseDTO.Combinable> despues = new ArrayList<>();
+        for (Funcion otra : candidatas) {
+            if (libres.getOrDefault(otra.getId(), 0) <= 0) {
+                continue;
+            }
+            long entreAntes = Duration.between(finEstimado(otra), inicioElegida).toMinutes();
+            long entreDespues = Duration.between(finElegida, otra.getFechaHoraInicio()).toMinutes();
+            if (entreAntes >= margenMinutos && entreAntes <= ventana) {
+                antes.add(combinable(otra, entreAntes, libres.get(otra.getId())));
+            } else if (entreDespues >= margenMinutos && entreDespues <= ventana) {
+                despues.add(combinable(otra, entreDespues, libres.get(otra.getId())));
+            }
+        }
+        Comparator<CombinablesResponseDTO.Combinable> porCercania = Comparator.comparingLong(CombinablesResponseDTO.Combinable::minutosEntre);
+        return new CombinablesResponseDTO(
+            new CombinablesResponseDTO.Referencia(elegida.getId(), elegida.getPelicula().getTitulo(), inicioElegida, finElegida),
+            antes.stream().sorted(porCercania).limit(4).toList(),
+            despues.stream().sorted(porCercania).limit(4).toList()
+        );
+    }
+
+    private LocalDateTime finEstimado(Funcion funcion) {
+        return funcion.getFechaHoraInicio().plusMinutes(funcion.getPelicula().getDuracionMinutos() + (long) minutosPublicidad);
+    }
+
+    private CombinablesResponseDTO.Combinable combinable(Funcion funcion, long minutosEntre, int butacasLibres) {
+        return new CombinablesResponseDTO.Combinable(
+            funcion.getId(),
+            funcion.getPelicula().getId(),
+            funcion.getPelicula().getTitulo(),
+            funcion.getPelicula().getUrlPoster(),
+            funcion.getFormato(),
+            funcion.getIdioma(),
+            funcion.getSala().getNombre(),
+            funcion.getFechaHoraInicio(),
+            finEstimado(funcion),
+            minutosEntre,
+            butacasLibres
+        );
     }
 
     @Transactional(readOnly = true)
