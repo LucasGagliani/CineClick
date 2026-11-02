@@ -217,12 +217,18 @@ class ApiIntegrationTests {
     @Test
     void unHorarioQueNoTerminaEnCeroOCincoSeRechaza() {
         FixtureMetricas fx = fixtureMetricas();
-        ResponseEntity<ErrorResponseDTO> respuesta = restTemplate.postForEntity(url("/api/funciones"),
-            new FuncionRequestDTO(fx.peliculaId(), fx.salaGrandeId(), fx.sabado().atTime(21, 32), new BigDecimal("1000"), FormatoFuncion.DOS_D, Idioma.CASTELLANO),
+        LocalDate domingo = fx.sabado().plusDays(1);
+        ResponseEntity<ErrorResponseDTO> rechazada = restTemplate.postForEntity(url("/api/funciones"),
+            new FuncionRequestDTO(fx.peliculaId(), fx.salaGrandeId(), domingo.atTime(17, 33), new BigDecimal("1000"), FormatoFuncion.DOS_D, Idioma.CASTELLANO),
             ErrorResponseDTO.class);
+        ResponseEntity<FuncionResponseDTO> aceptada = restTemplate.postForEntity(url("/api/funciones"),
+            new FuncionRequestDTO(fx.peliculaId(), fx.salaGrandeId(), domingo.atTime(17, 35), new BigDecimal("1000"), FormatoFuncion.DOS_D, Idioma.CASTELLANO),
+            FuncionResponseDTO.class);
 
-        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(respuesta.getBody().detalles()).anyMatch(d -> d.contains("El horario tiene que terminar en 0 o 5 (por ejemplo, 19:30 o 22:15)"));
+        assertThat(rechazada.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(rechazada.getBody().detalles()).anyMatch(d -> d.contains("El horario tiene que terminar en 0 o 5 (por ejemplo, 19:30 o 22:15)"));
+        assertThat(aceptada.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(aceptada.getBody().fechaHoraInicio()).isEqualTo(domingo.atTime(17, 35));
     }
 
     @Test
