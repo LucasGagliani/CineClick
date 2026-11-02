@@ -30,6 +30,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,6 +65,7 @@ public class DataSeeder implements ApplicationRunner {
     private final ButacaRepository butacaRepository;
     private final EntradaRepository entradaRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${cineclick.funciones.minutos-limpieza:20}")
     private int minutosLimpieza;
@@ -129,7 +131,7 @@ public class DataSeeder implements ApplicationRunner {
         usuario.setNombre(nombre);
         usuario.setApellido(apellido);
         usuario.setEmail(email);
-        usuario.setPassword(password);
+        usuario.setPassword(passwordEncoder.encode(password));
         usuario.setRol(rol);
         return usuario;
     }

@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class MigracionDatos implements ApplicationRunner {
     private static final Map<String, String> ZONAS_SIN_BARRIO_PROPIO = Map.of("abasto", "Balvanera");
 
     private final JdbcTemplate jdbcTemplate;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional
@@ -44,6 +46,17 @@ public class MigracionDatos implements ApplicationRunner {
         pasarEnumAVarchar("pagos", "estado");
         pasarEnumAVarchar("pagos", "metodo_pago");
         migrarVigenciaDePromociones();
+        cifrarContrasenas();
+    }
+
+    private void cifrarContrasenas() {
+        List<Map<String, Object>> enTextoPlano = jdbcTemplate.queryForList("select id, password from usuarios where password not like '$2_$%'");
+        for (Map<String, Object> fila : enTextoPlano) {
+            jdbcTemplate.update("update usuarios set password = ? where id = ?", passwordEncoder.encode((String) fila.get("password")), fila.get("id"));
+        }
+        if (!enTextoPlano.isEmpty()) {
+            log.info("Migracion: {} contrasenas pasan a guardarse con BCrypt", enTextoPlano.size());
+        }
     }
 
     private void pasarEnumAVarchar(String tabla, String columna) {

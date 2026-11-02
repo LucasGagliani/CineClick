@@ -11,6 +11,7 @@ import com.cineclick.model.Usuario;
 import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ public class ClienteService {
 
     private final ClienteRepository clienteRepository;
     private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
     public List<ClienteResponseDTO> listar() {
@@ -35,7 +37,7 @@ public class ClienteService {
         usuario.setNombre(dto.nombre());
         usuario.setApellido(dto.apellido());
         usuario.setEmail(dto.email());
-        usuario.setPassword(dto.password());
+        usuario.setPassword(passwordEncoder.encode(dto.password()));
         usuario.setRol(RolUsuario.CLIENTE);
 
         Cliente cliente = new Cliente();
@@ -58,7 +60,7 @@ public class ClienteService {
         cliente.getUsuario().setNombre(dto.nombre());
         cliente.getUsuario().setApellido(dto.apellido());
         cliente.getUsuario().setEmail(dto.email());
-        cliente.getUsuario().setPassword(dto.password());
+        cliente.getUsuario().setPassword(passwordEncoder.encode(dto.password()));
         cliente.setTelefono(dto.telefono());
         return DtoMapper.toClienteResponse(clienteRepository.save(cliente));
     }

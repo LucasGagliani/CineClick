@@ -8,6 +8,7 @@ import com.cineclick.model.Usuario;
 import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +18,13 @@ public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final ClienteRepository clienteRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
     public LoginResponseDTO login(LoginRequestDTO dto) {
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(dto.email())
             .orElseThrow(() -> new CredencialesInvalidasException("Email o password incorrectos"));
-        if (!usuario.isActivo() || !usuario.getPassword().equals(dto.password())) {
+        if (!usuario.isActivo() || !passwordEncoder.matches(dto.password(), usuario.getPassword())) {
             throw new CredencialesInvalidasException("Email o password incorrectos");
         }
         Long clienteId = clienteRepository.findByUsuarioEmailIgnoreCase(usuario.getEmail())
