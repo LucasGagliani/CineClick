@@ -215,6 +215,17 @@ class ApiIntegrationTests {
     }
 
     @Test
+    void unHorarioQueNoTerminaEnCeroOCincoSeRechaza() {
+        FixtureMetricas fx = fixtureMetricas();
+        ResponseEntity<ErrorResponseDTO> respuesta = restTemplate.postForEntity(url("/api/funciones"),
+            new FuncionRequestDTO(fx.peliculaId(), fx.salaGrandeId(), fx.sabado().atTime(21, 32), new BigDecimal("1000"), FormatoFuncion.DOS_D, Idioma.CASTELLANO),
+            ErrorResponseDTO.class);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(respuesta.getBody().detalles()).anyMatch(d -> d.contains("El horario tiene que terminar en 0 o 5 (por ejemplo, 19:30 o 22:15)"));
+    }
+
+    @Test
     void permiteConsultarRecursosConGet() {
         ResponseEntity<String> response = restTemplate.getForEntity(url("/api/peliculas"), String.class);
 
