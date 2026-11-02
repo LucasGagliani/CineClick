@@ -24,7 +24,9 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -57,18 +59,51 @@ public class ProgramadorDeFunciones {
         List<Pelicula> peliculas = peliculaRepository.findByActivaTrue().stream()
             .sorted(Comparator.comparing(Pelicula::getId))
             .toList();
-        Set<String> ocupados = funcionRepository.findAll().stream()
-            .map(funcion -> funcion.getSala().getId() + "|" + funcion.getFechaHoraInicio().toLocalDate())
+        Set<LocalDate> diasProgramados = funcionRepository.findAll().stream()
+            .map(funcion -> diaDeProgramacion(funcion.getFechaHoraInicio()))
             .collect(Collectors.toSet());
+        Map<Long, List<Sala>> salasPorCine = new LinkedHashMap<>();
+        salas.forEach(sala -> salasPorCine.computeIfAbsent(sala.getCine().getId(), id -> new ArrayList<>()).add(sala));
+        List<List<Sala>> cines = new ArrayList<>(salasPorCine.values());
+        LocalDate hoy = LocalDate.now();
         List<Funcion> nuevas = new ArrayList<>();
-        for (LocalDate fecha = desde; !fecha.isAfter(hasta); fecha = fecha.plusDays(1)) {
-            for (Sala sala : salas) {
-                if (!ocupados.contains(sala.getId() + "|" + fecha)) {
-                    nuevas.addAll(programarDia(sala, fecha, peliculas));
-                }
+        for (LocalDate fecha = desde; !fecha.isAfter(hasta) && !cines.isEmpty(); fecha = fecha.plusDays(1)) {
+            if (!diasProgramados.contains(fecha)) {
+                nuevas.addAll(programarDiaReducido(cines, fecha, funcionesDelDia(ChronoUnit.DAYS.between(hoy, fecha)), peliculas));
             }
         }
         return funcionRepository.saveAll(nuevas);
+    }
+
+    private static int funcionesDelDia(long diasDesdeHoy) {
+        if (diasDesdeHoy == 0) {
+            return 8;
+        }
+        if (diasDesdeHoy == 1) {
+            return 6;
+        }
+        return diasDesdeHoy > 0 ? 2 : 1;
+    }
+
+    private List<Funcion> programarDiaReducido(List<List<Sala>> cines, LocalDate fecha, int cantidad, List<Pelicula> peliculas) {
+        int rotacion = (int) Math.floorMod(fecha.toEpochDay(), cines.size());
+        List<Funcion> elegidas = new ArrayList<>();
+        for (int i = 0; i < cantidad; i++) {
+            List<Sala> salasDelCine = cines.get((rotacion + i) % cines.size());
+            int vuelta = i / cines.size();
+            Sala sala = salasDelCine.get((int) Math.floorMod(fecha.toEpochDay() + vuelta * 2L, salasDelCine.size()));
+            List<Funcion> delDia = programarDia(sala, fecha, peliculas);
+            if (delDia.isEmpty()) {
+                continue;
+            }
+            boolean noche = vuelta > 0 || (cantidad <= 2 && fecha.toEpochDay() % 2 == 0);
+            elegidas.add(noche ? delDia.get(delDia.size() - 1) : delDia.get(Math.min(1, delDia.size() - 1)));
+        }
+        return elegidas;
+    }
+
+    private static LocalDate diaDeProgramacion(LocalDateTime inicio) {
+        return inicio.minusHours(4).toLocalDate();
     }
 
     private List<Funcion> programarDia(Sala sala, LocalDate fecha, List<Pelicula> peliculas) {
