@@ -49,6 +49,8 @@ public class Pago {
     @Column(length = 4)
     private String ultimos4;
 
+    private LocalDateTime fechaReembolso;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "compra_id", nullable = false, unique = true)
     private Compra compra;
@@ -57,6 +59,11 @@ public class Pago {
         this.estado = EstadoPago.APROBADO;
         this.codigoTransaccion = codigoTransaccion;
         this.fechaPago = LocalDateTime.now();
+    }
+
+    public void reembolsar() {
+        this.estado = EstadoPago.REEMBOLSADO;
+        this.fechaReembolso = LocalDateTime.now();
     }
 
     public void rechazar() {

@@ -13,6 +13,7 @@ public record EntradaResponseDTO(
     String codigoButaca,
     TipoEntrada tipo,
     BigDecimal precioUnitario,
+    BigDecimal descuento,
     EstadoEntrada estado
 ) {
 }

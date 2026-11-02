@@ -42,8 +42,8 @@ public class CompraService {
 
     private static final String RESTRICCION_BUTACA = "uk_entrada_funcion_butaca_vigente";
 
-    private static final String ALFABETO_CODIGO = "0123456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
-    private static final int LARGO_CODIGO = 8;
+    private static final String ALFABETO_CODIGO = GeneradorCodigos.ALFABETO;
+    private static final int LARGO_CODIGO = GeneradorCodigos.LARGO;
 
     private final CompraRepository compraRepository;
     private final EntradaRepository entradaRepository;
@@ -73,7 +73,7 @@ public class CompraService {
         compra.setFuncion(funcion);
 
         if (dto.codigoPromocion() != null && !dto.codigoPromocion().isBlank()) {
-            Promocion promocion = promocionService.validarPromocionParaCompra(dto.codigoPromocion());
+            Promocion promocion = promocionService.validarPromocionParaCompra(dto.codigoPromocion(), cliente, funcion, LocalDateTime.now());
             compra.setPromocion(promocion);
         }
 
@@ -123,7 +123,7 @@ public class CompraService {
     public CompraResponseDTO aplicarPromocion(Long id, String codigo) {
         Compra compra = buscarEntidad(id);
         verificarReservaActiva(compra);
-        compra.setPromocion(promocionService.validarPromocionParaCompra(codigo));
+        compra.setPromocion(promocionService.validarPromocionParaCompra(codigo, compra.getCliente(), compra.getFuncion(), LocalDateTime.now()));
         compra.calcularTotal();
         return DtoMapper.toCompraResponse(compra);
     }

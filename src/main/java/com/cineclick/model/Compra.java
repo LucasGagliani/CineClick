@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -83,9 +84,16 @@ public class Compra {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    public Map<Entrada, BigDecimal> descuentosPorEntrada() {
+        return promocion == null ? Map.of() : promocion.descuentosPorEntrada(entradas);
+    }
+
+    public BigDecimal calcularDescuento() {
+        return descuentosPorEntrada().values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     public BigDecimal calcularTotal() {
-        BigDecimal subtotal = calcularSubtotal();
-        total = promocion == null ? subtotal : promocion.calcularDescuento(subtotal);
+        total = calcularSubtotal().subtract(calcularDescuento()).max(BigDecimal.ZERO);
         return total;
     }
 
@@ -108,5 +116,13 @@ public class Compra {
     public void cancelar() {
         estado = EstadoCompra.CANCELADA;
         entradas.forEach(Entrada::cancelar);
+    }
+
+    public void arrepentir() {
+        estado = EstadoCompra.ARREPENTIDA;
+        entradas.forEach(Entrada::cancelar);
+        if (pago != null) {
+            pago.reembolsar();
+        }
     }
 }

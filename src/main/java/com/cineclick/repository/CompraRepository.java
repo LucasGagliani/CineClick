@@ -22,6 +22,10 @@ public interface CompraRepository extends JpaRepository<Compra, Long> {
 
     boolean existsByPromocionId(Long promocionId);
 
+    boolean existsByClienteIdAndEstado(Long clienteId, EstadoCompra estado);
+
+    long countByClienteIdAndPromocionIdAndEstado(Long clienteId, Long promocionId, EstadoCompra estado);
+
     @Query("select count(c), coalesce(sum(c.total), 0) from Compra c "
         + "where c.estado = com.cineclick.model.EstadoCompra.CONFIRMADA and c.fechaCompra >= :desde and c.fechaCompra < :hasta and (:cineId is null or c.funcion.sala.cine.id = :cineId)")
     List<Object[]> resumenVentas(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta, @Param("cineId") Long cineId);

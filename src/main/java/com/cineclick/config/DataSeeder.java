@@ -297,8 +297,8 @@ public class DataSeeder implements ApplicationRunner {
         promo.setTitulo(TITULO_PROMO_DEMO);
         promo.setDescripcion(CONDICIONES_PROMO_DEMO);
         promo.setPorcentajeDescuento(BigDecimal.valueOf(10));
-        promo.setFechaInicio(LocalDate.now().minusDays(1));
-        promo.setFechaFin(LocalDate.now().plusMonths(2));
+        promo.setVigenciaDesde(LocalDate.now().minusDays(1).atStartOfDay());
+        promo.setVigenciaHasta(LocalDate.now().plusMonths(2).atTime(23, 59, 59));
         promocionRepository.save(promo);
     }
 }

@@ -40,6 +40,33 @@ public class MigracionDatos implements ApplicationRunner {
         migrarColumna("peliculas", "clasificacion", Clasificacion.class, Clasificacion::desdeTexto, Clasificacion.ATP);
         migrarColumna("peliculas", "idioma", Idioma.class, Idioma::desdeTexto, Idioma.CASTELLANO);
         migrarColumna("funciones", "idioma", Idioma.class, Idioma::desdeTexto, Idioma.CASTELLANO);
+        pasarEnumAVarchar("compras", "estado");
+        pasarEnumAVarchar("pagos", "estado");
+        pasarEnumAVarchar("pagos", "metodo_pago");
+        migrarVigenciaDePromociones();
+    }
+
+    private void pasarEnumAVarchar(String tabla, String columna) {
+        String tipo = jdbcTemplate.queryForList(
+            "select data_type from information_schema.columns where lower(table_name) = ? and lower(column_name) = ?",
+            String.class, tabla, columna
+        ).stream().findFirst().orElse("");
+        if (tipo.equalsIgnoreCase("enum")) {
+            jdbcTemplate.execute("alter table " + tabla + " alter column " + columna + " set data type varchar(30)");
+            log.info("Migracion: {}.{} pasa de enum a varchar para aceptar los estados nuevos", tabla, columna);
+        }
+    }
+
+    private void migrarVigenciaDePromociones() {
+        if (!existeColumna("promociones", "fecha_inicio")) {
+            return;
+        }
+        int filas = jdbcTemplate.update("update promociones set vigencia_desde = cast(fecha_inicio as timestamp), "
+            + "vigencia_hasta = dateadd(second, 86399, cast(fecha_fin as timestamp))");
+        jdbcTemplate.execute("alter table promociones drop column fecha_inicio");
+        jdbcTemplate.execute("alter table promociones drop column fecha_fin");
+        jdbcTemplate.execute("alter table promociones alter column descripcion set null");
+        log.info("Migracion: vigencia de {} promociones pasa a fecha y hora (desde 00:00, hasta 23:59:59)", filas);
     }
 
     private void migrarCines() {

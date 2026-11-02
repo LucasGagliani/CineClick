@@ -16,6 +16,8 @@ import com.cineclick.model.TipoEntrada;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class DtoMapper {
@@ -135,7 +137,7 @@ public final class DtoMapper {
             compra.getTotal(),
             compra.getPromocion() == null ? null : compra.getPromocion().getCodigo(),
             compra.getEstado(),
-            compra.getEntradas().stream().map(DtoMapper::toEntradaResponse).toList(),
+            entradasConDescuento(compra),
             compra.getPago() == null ? null : toPagoResponse(compra.getPago()),
             pendiente ? compra.expiraEn() : null,
             pendiente ? compra.segundosRestantes(ahora) : null
@@ -166,7 +168,14 @@ public final class DtoMapper {
         );
     }
 
-    public static EntradaResponseDTO toEntradaResponse(Entrada entrada) {
+    private static List<EntradaResponseDTO> entradasConDescuento(Compra compra) {
+        Map<Entrada, BigDecimal> descuentos = compra.descuentosPorEntrada();
+        return compra.getEntradas().stream()
+            .map(entrada -> toEntradaResponse(entrada, descuentos.getOrDefault(entrada, BigDecimal.ZERO)))
+            .toList();
+    }
+
+    public static EntradaResponseDTO toEntradaResponse(Entrada entrada, BigDecimal descuento) {
         return new EntradaResponseDTO(
             entrada.getId(),
             entrada.getCodigoQr(),
@@ -175,6 +184,7 @@ public final class DtoMapper {
             entrada.getButaca().codigo(),
             entrada.getTipo() == null ? TipoEntrada.GENERAL : entrada.getTipo(),
             entrada.getPrecioUnitario(),
+            descuento,
             entrada.getEstado()
         );
     }
@@ -193,15 +203,28 @@ public final class DtoMapper {
     }
 
     public static PromocionResponseDTO toPromocionResponse(Promocion promocion) {
+        return toPromocionResponse(promocion, null, null);
+    }
+
+    public static PromocionResponseDTO toPromocionResponse(Promocion promocion, Boolean usable, String motivoNoUsable) {
         return new PromocionResponseDTO(
             promocion.getId(),
             promocion.getCodigo(),
             promocion.getTitulo(),
             promocion.getDescripcion(),
             promocion.getPorcentajeDescuento(),
-            promocion.getFechaInicio(),
-            promocion.getFechaFin(),
-            promocion.isActiva()
+            promocion.getVigenciaDesde(),
+            promocion.getVigenciaHasta(),
+            promocion.isActiva(),
+            promocion.getDiasSemana().stream().sorted().toList(),
+            promocion.getUsosMaximosTotales(),
+            promocion.getUsosActuales(),
+            promocion.getUsosMaximosPorUsuario(),
+            promocion.isSoloPrimeraCompra(),
+            promocion.getMaxEntradasConDescuento(),
+            promocion.getMontoMaximoDescuento(),
+            usable,
+            motivoNoUsable
         );
     }
 }
