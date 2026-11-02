@@ -211,6 +211,11 @@ public class FuncionService {
         if (funcion.getFechaHoraInicio().isBefore(LocalDateTime.now())) {
             throw new CampoInvalidoException("fechaHoraInicio", "La función tiene que ser en el futuro");
         }
+        if (funcion.getFechaHoraInicio().getMinute() % 5 != 0) {
+            throw new CampoInvalidoException("fechaHoraInicio", "El horario tiene que terminar en 0 o 5 (por ejemplo, 19:30 o 22:15)");
+        }
+        funcion.setFechaHoraInicio(funcion.getFechaHoraInicio().withSecond(0).withNano(0));
+        funcion.calcularHorarioFin(minutosLimpieza);
         DateTimeFormatter hora = DateTimeFormatter.ofPattern("HH:mm");
         funcionRepository.findBySalaId(funcion.getSala().getId()).stream()
             .filter(existente -> idIgnorado == null || !existente.getId().equals(idIgnorado))
