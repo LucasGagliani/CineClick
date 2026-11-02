@@ -1,6 +1,12 @@
 package com.cineclick;
 
+import com.cineclick.dto.ArrepentimientoRequestDTO;
+import com.cineclick.dto.ArrepentimientoResponseDTO;
 import com.cineclick.dto.ButacaResponseDTO;
+import com.cineclick.dto.CombinablesResponseDTO;
+import com.cineclick.dto.PromocionRequestDTO;
+import com.cineclick.dto.PromocionResponseDTO;
+import com.cineclick.dto.ResumenCompraDTO;
 import com.cineclick.dto.CineRequestDTO;
 import com.cineclick.dto.CineResponseDTO;
 import com.cineclick.dto.FuncionRequestDTO;
@@ -30,12 +36,15 @@ import com.cineclick.model.Butaca;
 import com.cineclick.model.Compra;
 import com.cineclick.model.Entrada;
 import com.cineclick.model.EstadoEntrada;
+import com.cineclick.model.EstadoArrepentimiento;
+import com.cineclick.model.MotivoArrepentimiento;
 import com.cineclick.model.Provincia;
 import com.cineclick.model.TipoSala;
 import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.FuncionRepository;
+import com.cineclick.service.GeneradorCodigos;
 import com.cineclick.service.MetricasService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.junit.jupiter.api.Test;
@@ -58,6 +67,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.List;
 import java.util.Set;
 
@@ -342,7 +352,8 @@ class ApiIntegrationTests {
     @Autowired
     private ClienteRepository clienteRepository;
 
-    private record FixtureMetricas(Long cineId, Long funcionGrande, Long funcionChica, Long clienteId, LocalDate sabado) {
+    private record FixtureMetricas(Long cineId, Long funcionGrande, Long funcionChica, Long clienteId, LocalDate sabado,
+                                   Long peliculaId, Long salaGrandeId, String email) {
     }
 
     @Test
@@ -440,8 +451,299 @@ class ApiIntegrationTests {
         LocalDate sabado = LocalDate.now(MetricasService.ZONA).with(TemporalAdjusters.next(DayOfWeek.SATURDAY));
         Long funcionGrande = crearFuncion(pelicula.id(), grande.id(), sabado.atTime(18, 0));
         Long funcionChica = crearFuncion(pelicula.id(), chica.id(), sabado.atTime(18, 0));
-        ClienteResponseDTO cliente = crearCliente("metricas-" + sufijo + "@mail.com");
-        return new FixtureMetricas(cine.id(), funcionGrande, funcionChica, cliente.id(), sabado);
+        String email = "metricas-" + sufijo + "@mail.com";
+        ClienteResponseDTO cliente = crearCliente(email);
+        return new FixtureMetricas(cine.id(), funcionGrande, funcionChica, cliente.id(), sabado, pelicula.id(), grande.id(), email);
+    }
+
+    // ---------- Arrepentimiento ----------
+
+    @Test
+    void arrepentimientoEnPlazoAnulaLasEntradasYLiberaLasButacas() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long compraId = venderEntradas(fx, fx.funcionGrande(), 0, 2, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA).minusHours(1));
+        CompraResponseDTO antes = restTemplate.getForObject(url("/api/compras/" + compraId), CompraResponseDTO.class);
+        String codigoEntrada = antes.entradas().get(0).codigoQr();
+
+        ResponseEntity<ArrepentimientoResponseDTO> respuesta = restTemplate.postForEntity(url("/api/arrepentimientos"),
+            new ArrepentimientoRequestDTO(fx.email().toUpperCase(), codigoEntrada.substring(0, 4) + "-" + codigoEntrada.substring(4).toLowerCase(),
+                "Ana Prueba", MotivoArrepentimiento.NO_PUEDO_ASISTIR, true),
+            ArrepentimientoResponseDTO.class);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(respuesta.getBody().estado()).isEqualTo(EstadoArrepentimiento.APROBADA);
+        assertThat(respuesta.getBody().codigo()).matches("ARR-[0-9A-NP-Z]{8}");
+        CompraResponseDTO despues = restTemplate.getForObject(url("/api/compras/" + compraId), CompraResponseDTO.class);
+        assertThat(despues.estado()).isEqualTo(EstadoCompra.ARREPENTIDA);
+        assertThat(despues.entradas()).allMatch(e -> e.estado() == EstadoEntrada.CANCELADA);
+        List<String> butacas = antes.entradas().stream().map(e -> e.codigoButaca()).toList();
+        ButacaResponseDTO[] mapa = restTemplate.getForObject(url("/api/funciones/" + fx.funcionGrande() + "/butacas-disponibles"), ButacaResponseDTO[].class);
+        assertThat(mapa).filteredOn(b -> butacas.contains(b.codigo())).hasSize(2).allMatch(ButacaResponseDTO::disponible);
+    }
+
+    @Test
+    void arrepentimientoFueraDePlazoQuedaParaRevisionSinAnular() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long compraId = venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA).minusDays(11));
+
+        ArrepentimientoResponseDTO solicitud = restTemplate.postForObject(url("/api/arrepentimientos"),
+            new ArrepentimientoRequestDTO(fx.email(), String.valueOf(compraId), "Ana Prueba", null, true), ArrepentimientoResponseDTO.class);
+
+        assertThat(solicitud.estado()).isEqualTo(EstadoArrepentimiento.FUERA_DE_PLAZO);
+        assertThat(solicitud.motivoFueraDePlazo()).contains("10 días");
+        CompraResponseDTO compra = restTemplate.getForObject(url("/api/compras/" + compraId), CompraResponseDTO.class);
+        assertThat(compra.estado()).isEqualTo(EstadoCompra.CONFIRMADA);
+        assertThat(compra.entradas()).allMatch(e -> e.estado() == EstadoEntrada.EMITIDA);
+    }
+
+    @Test
+    void dosSolicitudesDeArrepentimientoDevuelvenElMismoCodigo() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long compraId = venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA).minusHours(2));
+        ArrepentimientoRequestDTO pedido = new ArrepentimientoRequestDTO(fx.email(), String.valueOf(compraId), "Ana Prueba", null, true);
+
+        ArrepentimientoResponseDTO primera = restTemplate.postForObject(url("/api/arrepentimientos"), pedido, ArrepentimientoResponseDTO.class);
+        ArrepentimientoResponseDTO segunda = restTemplate.postForObject(url("/api/arrepentimientos"), pedido, ArrepentimientoResponseDTO.class);
+
+        assertThat(segunda.codigo()).isEqualTo(primera.codigo());
+        assertThat(segunda.id()).isEqualTo(primera.id());
+    }
+
+    @Test
+    void laBusquedaDeCompraNoRevelaSiElEmailExiste() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long compraId = venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA).minusHours(2));
+
+        ResponseEntity<ErrorResponseDTO> emailInexistente = restTemplate.getForEntity(
+            url("/api/compras/buscar?email=nadie@mail.com&codigo=" + compraId), ErrorResponseDTO.class);
+        ResponseEntity<ErrorResponseDTO> codigoInexistente = restTemplate.getForEntity(
+            url("/api/compras/buscar?email=" + fx.email() + "&codigo=ZZZZ9999"), ErrorResponseDTO.class);
+        ResponseEntity<ResumenCompraDTO> correcta = restTemplate.getForEntity(
+            url("/api/compras/buscar?email=" + fx.email() + "&codigo=" + compraId), ResumenCompraDTO.class);
+
+        assertThat(emailInexistente.getStatusCode()).isEqualTo(codigoInexistente.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(emailInexistente.getBody().mensaje()).isEqualTo(codigoInexistente.getBody().mensaje());
+        assertThat(correcta.getBody().compraId()).isEqualTo(compraId);
+        assertThat(correcta.getBody().elegibleArrepentimiento()).isTrue();
+    }
+
+    // ---------- Doble funcion ----------
+
+    @Test
+    void combinablesRespetanElMargenYDescartanMismaPeliculaOtroCineYAgotadas() {
+        FixtureMetricas fx = fixtureMetricas();
+        String sufijo = UUID.randomUUID().toString().substring(0, 6);
+        Long salaB = crearSala(fx.cineId(), "B", 3, 3, 3);
+        Long salaC = crearSala(fx.cineId(), "C", 4, 3, 3);
+        Long salaUnica = crearSala(fx.cineId(), "Unica", 5, 1, 1);
+        Long otra = crearPelicula("Otra " + sufijo);
+        Long tercera = crearPelicula("Tercera " + sufijo);
+        LocalDate sabado = fx.sabado();
+        Long elegida = crearFuncion(fx.peliculaId(), fx.salaGrandeId(), sabado.atTime(20, 30));
+        Long terminaCincoAntes = crearFuncion(otra, salaB, sabado.atTime(18, 30));
+        Long terminaVeinteAntes = crearFuncion(tercera, salaC, sabado.atTime(18, 15));
+        Long mismaPelicula = crearFuncion(fx.peliculaId(), salaC, sabado.atTime(23, 0));
+        Long agotada = crearFuncion(otra, salaUnica, sabado.atTime(22, 45));
+        venderEntradas(fx, agotada, 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA));
+        Long despues = crearFuncion(tercera, salaB, sabado.atTime(23, 10));
+        FixtureMetricas otroCine = fixtureMetricas();
+        Long deOtroCine = crearFuncion(otra, otroCine.salaGrandeId(), sabado.atTime(23, 0));
+
+        CombinablesResponseDTO combinables = restTemplate.getForObject(url("/api/funciones/" + elegida + "/combinables"), CombinablesResponseDTO.class);
+
+        assertThat(combinables.elegida().finEstimado()).isEqualTo(sabado.atTime(22, 25));
+        assertThat(combinables.antes()).extracting(CombinablesResponseDTO.Combinable::funcionId).containsExactly(terminaVeinteAntes);
+        assertThat(combinables.antes().get(0).minutosEntre()).isEqualTo(20);
+        assertThat(combinables.despues()).extracting(CombinablesResponseDTO.Combinable::funcionId).containsExactly(despues);
+        assertThat(combinables.antes()).extracting(CombinablesResponseDTO.Combinable::funcionId).doesNotContain(terminaCincoAntes);
+        assertThat(combinables.despues()).extracting(CombinablesResponseDTO.Combinable::funcionId).doesNotContain(mismaPelicula, agotada, deOtroCine);
+    }
+
+    // ---------- Reglas de promociones ----------
+
+    @Test
+    void promocionDeLunesNoValeParaUnaFuncionDelSabado() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(DayOfWeek.MONDAY), null, null, false, null, null);
+        CompraResponseDTO compra = reservar(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL));
+
+        ResponseEntity<ErrorResponseDTO> respuesta = aplicarPromocion(compra.id(), codigo);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(respuesta.getBody().mensaje()).isEqualTo("Esta promoción vale los lunes, y tu función es el sábado");
+    }
+
+    @Test
+    void promocionDeLunesValeParaUnaFuncionDelLunesAunqueSeCompreOtroDia() {
+        FixtureMetricas fx = fixtureMetricas();
+        LocalDate lunes = fx.sabado().with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Long funcionLunes = crearFuncion(fx.peliculaId(), fx.salaGrandeId(), lunes.atTime(18, 0));
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(DayOfWeek.MONDAY), null, null, false, null, null);
+        CompraResponseDTO compra = reservar(fx.clienteId(), funcionLunes, List.of(TipoEntrada.GENERAL));
+
+        ResponseEntity<CompraResponseDTO> respuesta = restTemplate.postForEntity(url("/api/compras/" + compra.id() + "/promocion"),
+            new com.cineclick.dto.AplicarPromocionRequestDTO(codigo), CompraResponseDTO.class);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody().total()).isEqualByComparingTo("900");
+    }
+
+    @Test
+    void promocionDeUnUsoPorUsuarioRechazaLaSegundaCompra() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(), null, 1, false, null, null);
+        CompraResponseDTO primera = reservarConPromocion(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL), codigo);
+        assertThat(pagar(primera.id()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        CompraResponseDTO segunda = reservar(fx.clienteId(), fx.funcionChica(), List.of(TipoEntrada.GENERAL));
+
+        ResponseEntity<ErrorResponseDTO> respuesta = aplicarPromocion(segunda.id(), codigo);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(respuesta.getBody().mensaje()).isEqualTo("Ya usaste esta promoción");
+    }
+
+    @Test
+    void promocionDePrimeraCompraSoloCuentaComprasConfirmadas() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(), null, null, true, null, null);
+        venderEntradas(fx, fx.funcionGrande(), 0, 1, EstadoCompra.CONFIRMADA, LocalDateTime.now(MetricasService.ZONA).minusDays(1));
+        CompraResponseDTO conCompraPrevia = reservar(fx.clienteId(), fx.funcionChica(), List.of(TipoEntrada.GENERAL));
+        ClienteResponseDTO nuevo = crearCliente("primera-" + UUID.randomUUID() + "@mail.com");
+        venderEntradas(nuevo.id(), fx.funcionGrande(), 1, 1, EstadoCompra.CANCELADA, LocalDateTime.now(MetricasService.ZONA).minusDays(1));
+        CompraResponseDTO soloCanceladas = reservar(nuevo.id(), fx.funcionChica(), List.of(TipoEntrada.GENERAL));
+
+        ResponseEntity<ErrorResponseDTO> rechazada = aplicarPromocion(conCompraPrevia.id(), codigo);
+        ResponseEntity<String> aceptada = restTemplate.postForEntity(url("/api/compras/" + soloCanceladas.id() + "/promocion"),
+            new com.cineclick.dto.AplicarPromocionRequestDTO(codigo), String.class);
+
+        assertThat(rechazada.getBody().mensaje()).isEqualTo("Esta promoción es solo para tu primera compra");
+        assertThat(aceptada.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void conTopeDeUnUsoDosConfirmacionesConcurrentesSoloUnaLlevaElDescuento() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(), 1, null, false, null, null);
+        ClienteResponseDTO otro = crearCliente("concurrente-" + UUID.randomUUID() + "@mail.com");
+        CompraResponseDTO a = reservarConPromocion(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL), codigo);
+        CompraResponseDTO b = reservarConPromocion(otro.id(), fx.funcionChica(), List.of(TipoEntrada.GENERAL), codigo);
+
+        CompletableFuture<ResponseEntity<String>> pagoA = CompletableFuture.supplyAsync(() -> pagar(a.id()));
+        CompletableFuture<ResponseEntity<String>> pagoB = CompletableFuture.supplyAsync(() -> pagar(b.id()));
+        List<HttpStatus> estados = List.of((HttpStatus) pagoA.join().getStatusCode(), (HttpStatus) pagoB.join().getStatusCode());
+
+        assertThat(estados).containsExactlyInAnyOrder(HttpStatus.CREATED, HttpStatus.BAD_REQUEST);
+        List<CompraResponseDTO> compras = List.of(
+            restTemplate.getForObject(url("/api/compras/" + a.id()), CompraResponseDTO.class),
+            restTemplate.getForObject(url("/api/compras/" + b.id()), CompraResponseDTO.class)
+        );
+        assertThat(compras).filteredOn(c -> codigo.equals(c.codigoPromocion())).hasSize(1).allMatch(c -> c.estado() == EstadoCompra.CONFIRMADA);
+        assertThat(compras).filteredOn(c -> c.codigoPromocion() == null).hasSize(1)
+            .allMatch(c -> c.estado() == EstadoCompra.PENDIENTE_PAGO && c.total().compareTo(new BigDecimal("1000")) == 0);
+        assertThat(promocion(codigo).usosActuales()).isEqualTo(1);
+    }
+
+    @Test
+    void elDescuentoSeAplicaSoloALaEntradaDeMayorPrecio() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(), null, null, false, 1, null);
+
+        CompraResponseDTO compra = reservarConPromocion(fx.clienteId(), fx.funcionGrande(),
+            List.of(TipoEntrada.MENOR, TipoEntrada.GENERAL, TipoEntrada.JUBILADO), codigo);
+
+        assertThat(compra.subtotal()).isEqualByComparingTo("2300");
+        assertThat(compra.total()).isEqualByComparingTo("2200");
+        assertThat(compra.entradas()).filteredOn(e -> e.descuento().signum() > 0)
+            .singleElement().matches(e -> e.tipo() == TipoEntrada.GENERAL && e.descuento().compareTo(new BigDecimal("100")) == 0);
+    }
+
+    @Test
+    void conDescuentoTotalLaCompraSeConfirmaSinDatosDePago() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("100"), Set.of(), null, null, false, 1, null);
+        CompraResponseDTO dos = reservarConPromocion(fx.clienteId(), fx.funcionChica(), List.of(TipoEntrada.GENERAL, TipoEntrada.JUBILADO), codigo);
+        assertThat(dos.total()).isEqualByComparingTo("600");
+        CompraResponseDTO una = reservarConPromocion(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL), codigo);
+        assertThat(una.total()).isEqualByComparingTo("0");
+
+        ResponseEntity<PagoResponseDTOConMetodo> pago = restTemplate.postForEntity(url("/api/compras/" + una.id() + "/pagos"),
+            new PagoRequestDTO(null, null, null, true), PagoResponseDTOConMetodo.class);
+        ResponseEntity<String> sinTarjeta = restTemplate.postForEntity(url("/api/compras/" + dos.id() + "/pagos"),
+            new PagoRequestDTO(null, null, null, true), String.class);
+
+        assertThat(pago.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(pago.getBody().estado()).isEqualTo("APROBADO");
+        assertThat(pago.getBody().metodoPago()).isEqualTo("SIN_CARGO");
+        assertThat(sinTarjeta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void unArrepentimientoAprobadoDevuelveElUsoDeLaPromocion() {
+        FixtureMetricas fx = fixtureMetricas();
+        String codigo = crearPromocion(new BigDecimal("10"), Set.of(), 5, null, false, null, null);
+        CompraResponseDTO compra = reservarConPromocion(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL), codigo);
+        pagar(compra.id());
+        assertThat(promocion(codigo).usosActuales()).isEqualTo(1);
+
+        restTemplate.postForObject(url("/api/arrepentimientos"),
+            new ArrepentimientoRequestDTO(fx.email(), String.valueOf(compra.id()), "Ana Prueba", null, true), ArrepentimientoResponseDTO.class);
+
+        assertThat(promocion(codigo).usosActuales()).isZero();
+    }
+
+    private record PagoResponseDTOConMetodo(String estado, String metodoPago) {
+    }
+
+    private String crearPromocion(BigDecimal porcentaje, Set<DayOfWeek> dias, Integer usosTotales, Integer usosPorUsuario,
+                                  boolean primeraCompra, Integer maxEntradas, BigDecimal montoMaximo) {
+        String codigo = "P" + UUID.randomUUID().toString().replace("-", "").substring(0, 9).toUpperCase();
+        LocalDateTime ahora = LocalDateTime.now(MetricasService.ZONA);
+        ResponseEntity<PromocionResponseDTO> respuesta = restTemplate.postForEntity(url("/api/promociones"), new PromocionRequestDTO(
+            codigo, null, null, porcentaje, ahora.minusDays(1), ahora.plusDays(30), dias, usosTotales, usosPorUsuario,
+            primeraCompra, maxEntradas, montoMaximo, true
+        ), PromocionResponseDTO.class);
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return codigo;
+    }
+
+    private PromocionResponseDTO promocion(String codigo) {
+        PromocionResponseDTO[] todas = restTemplate.getForObject(url("/api/promociones"), PromocionResponseDTO[].class);
+        return java.util.Arrays.stream(todas).filter(p -> p.codigo().equals(codigo)).findFirst().orElseThrow();
+    }
+
+    private CompraResponseDTO reservar(Long clienteId, Long funcionId, List<TipoEntrada> tipos) {
+        return reservarConPromocion(clienteId, funcionId, tipos, null);
+    }
+
+    private CompraResponseDTO reservarConPromocion(Long clienteId, Long funcionId, List<TipoEntrada> tipos, String codigo) {
+        ButacaResponseDTO[] butacas = restTemplate.getForObject(url("/api/funciones/" + funcionId + "/butacas-disponibles"), ButacaResponseDTO[].class);
+        List<Long> libres = java.util.Arrays.stream(butacas).filter(ButacaResponseDTO::disponible).map(ButacaResponseDTO::id).limit(tipos.size()).toList();
+        List<EntradaSolicitadaDTO> entradas = tipos.stream().map(tipo -> new EntradaSolicitadaDTO(tipo, 1)).toList();
+        ResponseEntity<CompraResponseDTO> respuesta = restTemplate.postForEntity(url("/api/compras"),
+            new CompraRequestDTO(clienteId, funcionId, libres, entradas, codigo), CompraResponseDTO.class);
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return respuesta.getBody();
+    }
+
+    private ResponseEntity<ErrorResponseDTO> aplicarPromocion(Long compraId, String codigo) {
+        return restTemplate.postForEntity(url("/api/compras/" + compraId + "/promocion"),
+            new com.cineclick.dto.AplicarPromocionRequestDTO(codigo), ErrorResponseDTO.class);
+    }
+
+    private ResponseEntity<String> pagar(Long compraId) {
+        return restTemplate.postForEntity(url("/api/compras/" + compraId + "/pagos"),
+            new PagoRequestDTO(MetodoPago.TARJETA_CREDITO, "Visa", "4242", true), String.class);
+    }
+
+    private Long crearSala(Long cineId, String nombre, int numero, int filas, int butacasPorFila) {
+        return restTemplate.postForEntity(url("/api/cines/" + cineId + "/salas"),
+            new SalaRequestDTO(nombre, numero, TipoSala.TRADICIONAL, filas, butacasPorFila, null), SalaResponseDTO.class).getBody().id();
+    }
+
+    private Long crearPelicula(String titulo) {
+        return restTemplate.postForEntity(url("/api/peliculas"), new PeliculaRequestDTO(
+            titulo, "Pelicula de prueba", 100, Clasificacion.ATP, Genero.DRAMA, Idioma.CASTELLANO, Set.of(FormatoFuncion.DOS_D), null, null
+        ), PeliculaResponseDTO.class).getBody().id();
     }
 
     private Long crearFuncion(Long peliculaId, Long salaId, LocalDateTime inicio) {
@@ -454,18 +756,22 @@ class ApiIntegrationTests {
 
     // Compra armada directo con los repositorios (asi se puede fijar la fecha y el estado), con
     // "cantidad" entradas de $ 1000 en las butacas que siguen a "desde"
-    private void venderEntradas(FixtureMetricas fx, Long funcionId, int desde, int cantidad, EstadoCompra estado, LocalDateTime fecha) {
+    private Long venderEntradas(FixtureMetricas fx, Long funcionId, int desde, int cantidad, EstadoCompra estado, LocalDateTime fecha) {
+        return venderEntradas(fx.clienteId(), funcionId, desde, cantidad, estado, fecha);
+    }
+
+    private Long venderEntradas(Long clienteId, Long funcionId, int desde, int cantidad, EstadoCompra estado, LocalDateTime fecha) {
         var funcion = funcionRepository.findById(funcionId).orElseThrow();
         List<Butaca> butacas = butacaRepository.findBySalaIdAndActivaTrue(funcion.getSala().getId());
         Compra compra = new Compra();
-        compra.setCliente(clienteRepository.findById(fx.clienteId()).orElseThrow());
+        compra.setCliente(clienteRepository.findById(clienteId).orElseThrow());
         compra.setFuncion(funcion);
         compra.setFechaCompra(fecha);
         compra.setEstado(estado);
         for (Butaca butaca : butacas.subList(desde, desde + cantidad)) {
             Entrada entrada = new Entrada();
             entrada.setButaca(butaca);
-            entrada.setCodigoQr(UUID.randomUUID().toString().substring(0, 18));
+            entrada.setCodigoQr(GeneradorCodigos.nuevo("", codigo -> false));
             entrada.setPrecioUnitario(new BigDecimal("1000"));
             entrada.setTipo(TipoEntrada.GENERAL);
             if (estado == EstadoCompra.CANCELADA) {
@@ -475,7 +781,7 @@ class ApiIntegrationTests {
             compra.agregarEntrada(entrada);
         }
         compra.setTotal(new BigDecimal(1000L * cantidad));
-        compraRepository.save(compra);
+        return compraRepository.save(compra).getId();
     }
 
     private MetricasResponseDTO pedirMetricas(LocalDate desde, LocalDate hasta, Long cineId) {
