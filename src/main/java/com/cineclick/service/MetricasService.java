@@ -11,19 +11,16 @@ import com.cineclick.dto.MetricasResponseDTO.PromocionUso;
 import com.cineclick.dto.MetricasResponseDTO.ProximaFuncion;
 import com.cineclick.dto.MetricasResponseDTO.Resumen;
 import com.cineclick.dto.MetricasResponseDTO.TipoEntradaVenta;
-import com.cineclick.exception.AccesoDenegadoException;
 import com.cineclick.exception.CampoInvalidoException;
 import com.cineclick.model.Compra;
 import com.cineclick.model.EstadoCompra;
 import com.cineclick.model.EstadoPago;
 import com.cineclick.model.Funcion;
-import com.cineclick.model.RolUsuario;
 import com.cineclick.model.TipoEntrada;
 import com.cineclick.repository.ButacaRepository;
 import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.EntradaRepository;
 import com.cineclick.repository.FuncionRepository;
-import com.cineclick.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,7 +60,6 @@ public class MetricasService {
     private final EntradaRepository entradaRepository;
     private final FuncionRepository funcionRepository;
     private final ButacaRepository butacaRepository;
-    private final UsuarioRepository usuarioRepository;
 
     private record Rango(LocalDateTime desde, LocalDateTime hasta) {
         static Rango deDias(LocalDate desde, LocalDate hasta) {
@@ -87,15 +83,6 @@ public class MetricasService {
 
         long capacidad(Funcion funcion) {
             return capacidades.getOrDefault(funcion.getSala().getId(), 0L);
-        }
-    }
-
-    public void verificarAdmin(Long usuarioId) {
-        boolean esAdmin = usuarioId != null && usuarioRepository.findById(usuarioId)
-            .map(usuario -> usuario.isActivo() && usuario.getRol() == RolUsuario.ADMIN)
-            .orElse(false);
-        if (!esAdmin) {
-            throw new AccesoDenegadoException("Solo un administrador puede ver las metricas");
         }
     }
 
@@ -179,7 +166,7 @@ public class MetricasService {
 
     // Conversion: reservas creadas en el rango (todas, por fecha de compra) y como terminaron.
     // - pagadas: CONFIRMADA
-    // - canceladas: CANCELADA con el pago aprobado (se anulo despues de pagar)
+    // - canceladas: CANCELADA con el pago aprobado o ARREPENTIDA (se anulo despues de pagar)
     // - vencidas: CANCELADA sin pago aprobado (se vencio o se abandono) y las pendientes que ya pasaron
     //   los 8 minutos aunque la tarea de vencimiento todavia no las haya cancelado. El modelo no guarda
     //   el motivo de la cancelacion, asi que una reserva abandonada a mano tambien cuenta como vencida.
@@ -202,6 +189,7 @@ public class MetricasService {
                         vencidas += cantidad;
                     }
                 }
+                case ARREPENTIDA -> canceladas += cantidad;
                 case PENDIENTE_PAGO -> pendientes += cantidad;
             }
         }

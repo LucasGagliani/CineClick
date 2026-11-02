@@ -46,6 +46,11 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.UNAUTHORIZED, ex.getMessage(), request.getRequestURI(), List.of());
     }
 
+    @ExceptionHandler(DemasiadasSolicitudesException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarDemasiadas(DemasiadasSolicitudesException ex, HttpServletRequest request) {
+        return construirRespuesta(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request.getRequestURI(), List.of());
+    }
+
     @ExceptionHandler(AccesoDenegadoException.class)
     public ResponseEntity<ErrorResponseDTO> manejarAccesoDenegado(AccesoDenegadoException ex, HttpServletRequest request) {
         return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI(), List.of());

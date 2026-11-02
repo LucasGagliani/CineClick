@@ -1,6 +1,7 @@
 package com.cineclick.controller;
 
 import com.cineclick.dto.MetricasResponseDTO;
+import com.cineclick.service.AccesoAdmin;
 import com.cineclick.service.MetricasService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -20,6 +21,7 @@ import java.time.LocalDate;
 public class MetricasController {
 
     private final MetricasService metricasService;
+    private final AccesoAdmin accesoAdmin;
 
     @GetMapping("/metricas")
     public MetricasResponseDTO metricas(
@@ -28,7 +30,7 @@ public class MetricasController {
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
         @RequestParam(required = false) Long cineId
     ) {
-        metricasService.verificarAdmin(usuarioId);
+        accesoAdmin.verificar(usuarioId);
         return metricasService.calcular(desde, hasta, cineId);
     }
 }
