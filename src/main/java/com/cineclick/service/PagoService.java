@@ -15,6 +15,7 @@ import com.cineclick.repository.PagoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ public class PagoService {
     private final PagoRepository pagoRepository;
     private final CompraService compraService;
     private final PromocionService promocionService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(noRollbackFor = PromocionRechazadaException.class)
     public PagoResponseDTO registrarPago(Long compraId, PagoRequestDTO dto) {
@@ -62,7 +64,11 @@ public class PagoService {
         }
         compra.setPago(pago);
         try {
-            return DtoMapper.toPagoResponse(pagoRepository.saveAndFlush(pago));
+            Pago guardado = pagoRepository.saveAndFlush(pago);
+            if (guardado.getEstado() == EstadoPago.APROBADO) {
+                eventPublisher.publishEvent(new PagoAprobadoEvent(guardado.getId()));
+            }
+            return DtoMapper.toPagoResponse(guardado);
         } catch (DataIntegrityViolationException ex) {
             throw new RecursoDuplicadoException("La compra ya tiene un pago en proceso");
         }

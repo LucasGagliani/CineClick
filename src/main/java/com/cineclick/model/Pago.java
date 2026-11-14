@@ -51,6 +51,8 @@ public class Pago {
 
     private LocalDateTime fechaReembolso;
 
+    private LocalDateTime comprobanteEnviadoEn;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "compra_id", nullable = false, unique = true)
     private Compra compra;

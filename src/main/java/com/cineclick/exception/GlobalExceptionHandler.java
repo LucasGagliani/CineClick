@@ -144,6 +144,11 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarArgumento(IllegalArgumentException ex, HttpServletRequest request) {
+        return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI(), List.of());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDTO> manejarGeneral(Exception ex, HttpServletRequest request) {
         return construirRespuesta(HttpStatus.INTERNAL_SERVER_ERROR, "Error inesperado en el servidor", request.getRequestURI(), List.of());
