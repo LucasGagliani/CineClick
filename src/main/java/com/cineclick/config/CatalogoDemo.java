@@ -3,12 +3,15 @@ package com.cineclick.config;
 import com.cineclick.model.Clasificacion;
 import com.cineclick.model.FormatoFuncion;
 import com.cineclick.model.Genero;
+import com.cineclick.model.GeneroCliente;
 import com.cineclick.model.Idioma;
 import com.cineclick.model.PlanoSala;
 import com.cineclick.model.Provincia;
 import com.cineclick.model.TipoSala;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static com.cineclick.model.Clasificacion.ATP;
@@ -23,7 +26,6 @@ import static com.cineclick.model.Idioma.CASTELLANO;
 import static com.cineclick.model.Idioma.SUBTITULADA;
 
 public final class CatalogoDemo {
-
     public record SalaDemo(String nombre, int numero, TipoSala tipo, PlanoSala plano) {
     }
 
@@ -56,6 +58,9 @@ public final class CatalogoDemo {
     public record UsuarioDemo(String nombre, String apellido, String email, String password) {
     }
 
+    public record PerfilClienteDemo(String email, LocalDate fechaNacimiento, GeneroCliente genero, String telefono, String cinePreferido) {
+    }
+
     private static final String POSTERS = "/img/posters/";
 
     public static final UsuarioDemo ADMIN = new UsuarioDemo("Admin", "CineClick", "admin@cineclick.com", "admin123");
@@ -64,10 +69,25 @@ public final class CatalogoDemo {
     public static final UsuarioDemo SIN_COMPRAS = new UsuarioDemo("Sofía", "Ramírez", "sofia@cineclick.com", "sofia123");
     public static final UsuarioDemo OCASIONAL = new UsuarioDemo("Diego", "Fernández", "diego@cineclick.com", "diego123");
 
+    public static final List<PerfilClienteDemo> PERFILES_CLIENTES_DEMO = List.of(
+        new PerfilClienteDemo(FRECUENTE.email(), LocalDate.of(1994, 3, 12), GeneroCliente.FEMENINO, "1145671234", "CineClick Abasto"),
+        new PerfilClienteDemo(HOY_A_LA_NOCHE.email(), LocalDate.of(1987, 8, 25), GeneroCliente.MASCULINO, "1152349876", "CineClick Palermo"),
+        new PerfilClienteDemo(SIN_COMPRAS.email(), LocalDate.of(2003, 11, 3), GeneroCliente.FEMENINO, "1163452210", "CineClick Recoleta"),
+        new PerfilClienteDemo(OCASIONAL.email(), LocalDate.of(1971, 5, 19), GeneroCliente.MASCULINO, "1138904567", "CineClick Núñez")
+    );
+
     public static final List<String> NOMBRES = List.of(
         "Lucía", "Mateo", "Valentina", "Santiago", "Camila", "Benjamín", "Martina", "Joaquín", "Julieta", "Tomás",
         "Catalina", "Facundo", "Agustina", "Nicolás", "Florencia", "Lautaro", "Micaela", "Franco", "Rocío", "Ignacio"
     );
+
+    public static final Set<String> NOMBRES_FEMENINOS = Set.of(
+        "Lucía", "Valentina", "Camila", "Martina", "Julieta", "Catalina", "Agustina", "Florencia", "Micaela", "Rocío"
+    );
+
+    public static Optional<PerfilClienteDemo> perfilDe(String email) {
+        return PERFILES_CLIENTES_DEMO.stream().filter(perfil -> perfil.email().equalsIgnoreCase(email)).findFirst();
+    }
 
     public static final List<String> APELLIDOS = List.of(
         "González", "Rodríguez", "López", "Martínez", "García", "Pérez", "Sánchez", "Romero", "Sosa", "Torres",

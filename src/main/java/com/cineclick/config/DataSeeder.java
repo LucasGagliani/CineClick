@@ -2,11 +2,13 @@ package com.cineclick.config;
 
 import com.cineclick.config.CatalogoDemo.CineDemo;
 import com.cineclick.config.CatalogoDemo.PeliculaDemo;
+import com.cineclick.config.CatalogoDemo.PerfilClienteDemo;
 import com.cineclick.config.CatalogoDemo.SalaDemo;
 import com.cineclick.config.CatalogoDemo.UsuarioDemo;
 import com.cineclick.model.Cine;
 import com.cineclick.model.Cliente;
 import com.cineclick.model.Funcion;
+import com.cineclick.model.GeneroCliente;
 import com.cineclick.model.Pelicula;
 import com.cineclick.model.Promocion;
 import com.cineclick.model.RolUsuario;
@@ -35,6 +37,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,11 +51,12 @@ import java.util.Set;
 @Profile("demo")
 @RequiredArgsConstructor
 public class DataSeeder implements ApplicationRunner {
-
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
     private static final int DIAS_HACIA_ATRAS = 21;
     private static final int DIAS_HACIA_ADELANTE = 7;
     private static final int CLIENTES_GENERICOS = 60;
+    private static final int EDAD_MINIMA_GENERICOS = 16;
+    private static final int EDAD_MAXIMA_GENERICOS = 70;
 
     private final UsuarioRepository usuarioRepository;
     private final ClienteRepository clienteRepository;
@@ -81,14 +85,19 @@ public class DataSeeder implements ApplicationRunner {
             Cliente ocasional = clientePara(CatalogoDemo.OCASIONAL, ahora.minusDays(90));
             Map<String, Promocion> promociones = crearPromocionesQueFalten(ahora);
             crearCatalogo(hoy);
+            completarPerfilesDemo(cinesActivos());
             List<Funcion> funciones = programador.programar(hoy.minusDays(DIAS_HACIA_ATRAS), hoy.plusDays(DIAS_HACIA_ADELANTE));
-            List<Cliente> genericos = crearClientesGenericos(ahora);
+            List<Cliente> genericos = crearClientesGenericos(ahora, cinesActivos());
             generadorDeCompras.generar(funciones, new GeneradorDeCompras.Clientes(frecuente, hoyALaNoche, ocasional, genericos), promociones, ahora);
             log.info("Demo: base sembrada con {} funciones y {} clientes (admin: {})", funciones.size(), genericos.size() + 4, admin.getEmail());
         } else {
             if (!usuarioRepository.existsByEmailIgnoreCase(CatalogoDemo.FRECUENTE.email())) {
                 log.warn("Demo: la base ya tenia datos de antes, asi que no se sembraron las cuentas ni las compras de demo. "
                     + "Para la demo completa: frenar el backend, borrar la carpeta data/ y volver a arrancar.");
+            }
+            int completados = completarClientesDemoExistentes(hoy);
+            if (completados > 0) {
+                log.info("Demo: se completaron los datos personales de {} clientes de demo", completados);
             }
             int nuevas = programador.programar(hoy, hoy.plusDays(DIAS_HACIA_ADELANTE)).size();
             if (nuevas > 0) {
@@ -107,11 +116,13 @@ public class DataSeeder implements ApplicationRunner {
             Cliente cliente = new Cliente();
             cliente.setUsuario(nuevoUsuario(datos.nombre(), datos.apellido(), datos.email(), passwordEncoder.encode(datos.password()), RolUsuario.CLIENTE));
             cliente.setFechaRegistro(registro);
+            CatalogoDemo.perfilDe(datos.email()).ifPresent(perfil ->
+                completarFaltantes(cliente, perfil.fechaNacimiento(), perfil.genero(), perfil.telefono(), null));
             return clienteRepository.save(cliente);
         });
     }
 
-    private List<Cliente> crearClientesGenericos(LocalDateTime ahora) {
+    private List<Cliente> crearClientesGenericos(LocalDateTime ahora, List<Cine> cines) {
         Random azar = new Random(semilla + 1);
         String hash = passwordEncoder.encode(Long.toHexString(azar.nextLong()) + Long.toHexString(azar.nextLong()));
         List<Cliente> clientes = new ArrayList<>();
@@ -121,11 +132,106 @@ public class DataSeeder implements ApplicationRunner {
             String email = sinAcentos(nombre + "." + apellido) + (i + 1) + "@correo.example";
             Cliente cliente = new Cliente();
             cliente.setUsuario(nuevoUsuario(nombre, apellido, email, hash, RolUsuario.CLIENTE));
-            cliente.setTelefono(azar.nextBoolean() ? "11" + (40000000 + azar.nextInt(59999999)) : null);
+            cliente.setTelefono(telefonoAlAzar(azar));
             cliente.setFechaRegistro(ahora.minusDays(1 + azar.nextInt(180)).minusMinutes(azar.nextInt(1440)));
+            cliente.setFechaNacimiento(fechaNacimientoAlAzar(azar, ahora.toLocalDate()));
+            cliente.setGenero(generoAlAzar(azar, nombre));
+            cliente.setCinePreferido(cineAlAzar(azar, cines));
             clientes.add(cliente);
         }
         return clienteRepository.saveAll(clientes);
+    }
+
+    private int completarPerfilesDemo(List<Cine> cines) {
+        int completados = 0;
+        for (PerfilClienteDemo perfil : CatalogoDemo.PERFILES_CLIENTES_DEMO) {
+            Cliente cliente = clienteRepository.findByUsuarioEmailIgnoreCase(perfil.email()).orElse(null);
+            if (cliente != null && completarConPerfil(cliente, perfil, cines)) {
+                completados++;
+            }
+        }
+        return completados;
+    }
+
+    private int completarClientesDemoExistentes(LocalDate hoy) {
+        List<Cliente> incompletos = clienteRepository.findIncompletosConEmailTerminadoEn("%@cineclick.com", "%@correo.example");
+        if (incompletos.isEmpty()) {
+            return 0;
+        }
+        List<Cine> cines = cinesActivos();
+        Random azar = new Random(semilla + 2);
+        int completados = 0;
+        for (Cliente cliente : incompletos) {
+            PerfilClienteDemo perfil = CatalogoDemo.perfilDe(cliente.getUsuario().getEmail()).orElse(null);
+            boolean cambio;
+            if (perfil != null) {
+                cambio = completarConPerfil(cliente, perfil, cines);
+            } else {
+                LocalDate nacimiento = fechaNacimientoAlAzar(azar, hoy);
+                GeneroCliente genero = generoAlAzar(azar, cliente.getUsuario().getNombre());
+                Cine cine = cineAlAzar(azar, cines);
+                String telefono = telefonoAlAzar(azar);
+                cambio = completarFaltantes(cliente, nacimiento, genero, telefono, cine);
+            }
+            if (cambio) {
+                completados++;
+            }
+        }
+        return completados;
+    }
+
+    private static boolean completarConPerfil(Cliente cliente, PerfilClienteDemo perfil, List<Cine> cines) {
+        Cine cine = cines.stream()
+            .filter(c -> c.getNombre().equalsIgnoreCase(perfil.cinePreferido()))
+            .findFirst()
+            .orElse(cines.isEmpty() ? null : cines.get(0));
+        return completarFaltantes(cliente, perfil.fechaNacimiento(), perfil.genero(), perfil.telefono(), cine);
+    }
+
+    private static boolean completarFaltantes(Cliente cliente, LocalDate nacimiento, GeneroCliente genero, String telefono, Cine cine) {
+        boolean cambio = false;
+        if (cliente.getFechaNacimiento() == null && nacimiento != null) {
+            cliente.setFechaNacimiento(nacimiento);
+            cambio = true;
+        }
+        if (cliente.getGenero() == null && genero != null) {
+            cliente.setGenero(genero);
+            cambio = true;
+        }
+        if ((cliente.getTelefono() == null || cliente.getTelefono().isBlank()) && telefono != null) {
+            cliente.setTelefono(telefono);
+            cambio = true;
+        }
+        if (cliente.getCinePreferido() == null && cine != null) {
+            cliente.setCinePreferido(cine);
+            cambio = true;
+        }
+        return cambio;
+    }
+
+    private List<Cine> cinesActivos() {
+        return cineRepository.findByActivoTrue().stream().sorted(Comparator.comparing(Cine::getId)).toList();
+    }
+
+    private static String telefonoAlAzar(Random azar) {
+        return "11" + (40000000 + azar.nextInt(60000000));
+    }
+
+    private static LocalDate fechaNacimientoAlAzar(Random azar, LocalDate hoy) {
+        int edad = EDAD_MINIMA_GENERICOS + azar.nextInt(EDAD_MAXIMA_GENERICOS - EDAD_MINIMA_GENERICOS + 1);
+        return hoy.minusYears(edad).minusDays(azar.nextInt(365));
+    }
+
+    private static GeneroCliente generoAlAzar(Random azar, String nombre) {
+        if (azar.nextInt(20) == 0) {
+            return GeneroCliente.OTRO;
+        }
+        return CatalogoDemo.NOMBRES_FEMENINOS.contains(nombre) ? GeneroCliente.FEMENINO : GeneroCliente.MASCULINO;
+    }
+
+    private static Cine cineAlAzar(Random azar, List<Cine> cines) {
+        int indice = azar.nextInt(Math.max(1, cines.size()));
+        return cines.isEmpty() ? null : cines.get(indice);
     }
 
     private static Usuario nuevoUsuario(String nombre, String apellido, String email, String hash, RolUsuario rol) {

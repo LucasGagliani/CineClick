@@ -1,5 +1,8 @@
 package com.cineclick.dto;
 
+import com.cineclick.model.GeneroCliente;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record ClienteResponseDTO(
@@ -10,6 +13,10 @@ public record ClienteResponseDTO(
     String email,
     String telefono,
     LocalDateTime fechaRegistro,
-    boolean activo
+    boolean activo,
+    LocalDate fechaNacimiento,
+    GeneroCliente genero,
+    Long cinePreferidoId,
+    String cinePreferidoNombre
 ) {
 }

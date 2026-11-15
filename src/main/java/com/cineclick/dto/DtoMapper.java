@@ -110,6 +110,7 @@ public final class DtoMapper {
     }
 
     public static ClienteResponseDTO toClienteResponse(Cliente cliente) {
+        Cine cinePreferido = cliente.getCinePreferido();
         return new ClienteResponseDTO(
             cliente.getId(),
             cliente.getUsuario().getId(),
@@ -118,7 +119,11 @@ public final class DtoMapper {
             cliente.getUsuario().getEmail(),
             cliente.getTelefono(),
             cliente.getFechaRegistro(),
-            cliente.getUsuario().isActivo()
+            cliente.getUsuario().isActivo(),
+            cliente.getFechaNacimiento(),
+            cliente.getGenero(),
+            cinePreferido == null ? null : cinePreferido.getId(),
+            cinePreferido == null ? null : cinePreferido.getNombre()
         );
     }
 
