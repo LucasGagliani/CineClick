@@ -28,11 +28,111 @@ Content-Type: application/json
 
 { "email": "sofia@cineclick.com", "password": "sofia123" }
 
-### Password incorrecta -> 401
+### Password incorrecta -> 401 "El email o la contraseña no son correctos" (el mismo mensaje si el email no existe).
+# Al sexto intento fallido en 15 minutos con el mismo email -> 429 "Demasiados intentos. Probá de nuevo en N minutos"
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
 { "email": "admin@cineclick.com", "password": "cualquiera" }
+
+
+# ---------- Recuperacion de contraseña ----------
+# El token llega solo por correo (en la base se guarda su hash). Para probar a mano: pedir el enlace, copiar el token
+# del correo que le llega a la cuenta (o del enlace /restablecer?token=...) y pegarlo en @token.
+
+@token = PEGAR_ACA_EL_TOKEN_DEL_CORREO
+
+### Pedir el enlace -> 202. Con un email que no existe responde exactamente lo mismo (y no manda nada)
+POST {{base}}/api/auth/recuperar
+Content-Type: application/json
+
+{ "email": "sofia@cineclick.com" }
+
+### Validar el token -> 204 si sirve; 404 "Este enlace venció o ya se usó"
+GET {{base}}/api/auth/recuperar/{{token}}
+
+### Cambiar la contraseña -> 200 { mensaje, email }. Con el mismo token otra vez -> 404
+POST {{base}}/api/auth/restablecer
+Content-Type: application/json
+
+{ "token": "{{token}}", "password": "nueva1234" }
+
+### Contraseña sin numero -> 400 con el detalle en "detalles"
+POST {{base}}/api/auth/restablecer
+Content-Type: application/json
+
+{ "token": "{{token}}", "password": "sololetras" }
+
+
+# ---------- Mi cuenta (/api/usuarios/me) ----------
+# Opera sobre el usuario de X-Usuario-Id: aca, Sofia (sale del login de arriba, "# @name sofia").
+
+@sofiaId = {{sofia.response.body.$.usuarioId}}
+@tokenEmail = PEGAR_ACA_EL_TOKEN_DEL_CORREO_DE_CAMBIO_DE_EMAIL
+
+### Ver la cuenta
+GET {{base}}/api/usuarios/me
+X-Usuario-Id: {{sofiaId}}
+
+### Sin sesion -> 401
+GET {{base}}/api/usuarios/me
+
+### Modificar los datos personales (los de cliente con las mismas reglas que el registro)
+PATCH {{base}}/api/usuarios/me
+X-Usuario-Id: {{sofiaId}}
+Content-Type: application/json
+
+{ "nombre": "Sofía", "apellido": "Gómez", "telefono": "11 4000 1000", "fechaNacimiento": "1995-03-10", "genero": "FEMENINO", "cinePreferidoId": 3 }
+
+### Pedir el cambio de email -> 202 con emailPendiente. Se aplica recien al confirmar con el token del correo
+POST {{base}}/api/usuarios/me/email
+X-Usuario-Id: {{sofiaId}}
+Content-Type: application/json
+
+{ "email": "sofia.nueva@correo.example", "contrasena": "sofia123" }
+
+### Reenviar el enlace
+POST {{base}}/api/usuarios/me/email/reenviar
+X-Usuario-Id: {{sofiaId}}
+
+### Confirmar el cambio -> 200 con el email nuevo (404 si vencio o ya se uso)
+POST {{base}}/api/usuarios/me/email/confirmar
+X-Usuario-Id: {{sofiaId}}
+Content-Type: application/json
+
+{ "token": "{{tokenEmail}}" }
+
+### Cancelar el cambio pendiente
+DELETE {{base}}/api/usuarios/me/email
+X-Usuario-Id: {{sofiaId}}
+
+### Cambiar la contraseña con la actual incorrecta -> 400 en "actual"
+PUT {{base}}/api/usuarios/me/contrasena
+X-Usuario-Id: {{sofiaId}}
+Content-Type: application/json
+
+{ "actual": "cualquiera1", "nueva": "nueva1234" }
+
+### Recibir novedades (se guarda al tocar el interruptor)
+PATCH {{base}}/api/usuarios/me/comunicaciones
+X-Usuario-Id: {{sofiaId}}
+Content-Type: application/json
+
+{ "recibirNovedades": true }
+
+### Descargar mis datos (JSON sin contraseña; del pago solo marca y ultimos 4)
+POST {{base}}/api/usuarios/me/exportar
+X-Usuario-Id: {{sofiaId}}
+Content-Type: application/json
+
+{ "contrasena": "sofia123" }
+
+### Eliminar la cuenta del admin -> 400 "No podés eliminar la última cuenta de administrador"
+DELETE {{base}}/api/usuarios/me
+X-Usuario-Id: {{admin}}
+Content-Type: application/json
+
+{ "contrasena": "admin123" }
 
 
 # ---------- Catalogo (publico) ----------

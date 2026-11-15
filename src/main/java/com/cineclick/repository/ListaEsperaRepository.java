@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ListaEsperaRepository extends JpaRepository<ListaEspera, Long> {
+    void deleteByClienteId(Long clienteId);
+
     Optional<ListaEspera> findByClienteIdAndPeliculaId(Long clienteId, Long peliculaId);
 
     List<ListaEspera> findByClienteIdOrderByFechaAltaDesc(Long clienteId);

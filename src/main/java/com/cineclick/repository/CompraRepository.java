@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface CompraRepository extends JpaRepository<Compra, Long> {
+    List<Compra> findByClienteIdAndEstado(Long clienteId, EstadoCompra estado);
+
     List<Compra> findByClienteId(Long clienteId);
 
     boolean existsByFuncionId(Long funcionId);

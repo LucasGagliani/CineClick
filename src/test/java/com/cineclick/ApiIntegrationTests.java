@@ -23,6 +23,7 @@ import com.cineclick.dto.ClienteRequestDTO;
 import com.cineclick.dto.ClienteResponseDTO;
 import com.cineclick.dto.CompraRequestDTO;
 import com.cineclick.dto.CompraResponseDTO;
+import com.cineclick.dto.CuentaResponseDTO;
 import com.cineclick.dto.EntradaSolicitadaDTO;
 import com.cineclick.dto.ErrorResponseDTO;
 import com.cineclick.dto.FuncionResponseDTO;
@@ -38,6 +39,8 @@ import com.cineclick.model.Idioma;
 import com.cineclick.model.MetodoPago;
 import com.cineclick.model.TipoEntrada;
 import com.cineclick.model.Butaca;
+import com.cineclick.model.Cine;
+import com.cineclick.model.GeneroCliente;
 import com.cineclick.model.Compra;
 import com.cineclick.model.Entrada;
 import com.cineclick.model.EstadoEntrada;
@@ -48,13 +51,17 @@ import com.cineclick.model.ResultadoValidacion;
 import com.cineclick.model.Provincia;
 import com.cineclick.model.TipoSala;
 import com.cineclick.repository.ButacaRepository;
+import com.cineclick.repository.CineRepository;
 import com.cineclick.repository.ClienteRepository;
 import com.cineclick.repository.CompraRepository;
 import com.cineclick.repository.FuncionRepository;
 import com.cineclick.repository.UsuarioRepository;
+import com.cineclick.service.EmailService;
 import com.cineclick.service.GeneradorCodigos;
 import com.cineclick.service.MetricasService;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -85,12 +92,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ApiIntegrationTests {
+    private static final String PASSWORD_PRUEBA = "clave1234";
 
     @LocalServerPort
     private int port;
@@ -107,12 +121,17 @@ class ApiIntegrationTests {
     @Autowired
     private RelojDePrueba reloj;
 
+    @MockBean
+    private EmailService emailService;
+
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private CineRepository cineRepository;
+
     private Long adminId;
 
-    // El cliente por defecto no soporta PATCH (lo usamos para cancelar compras)
     private final TestRestTemplate restTemplate = new TestRestTemplate(
         new RestTemplateBuilder()
             .requestFactory(() -> new JdkClientHttpRequestFactory())
@@ -298,7 +317,7 @@ class ApiIntegrationTests {
 
     @Test
     void rechazaDatosInvalidosConRespuestaComprensible() {
-        ClienteRequestDTO invalido = new ClienteRequestDTO("", "", "email-invalido", "1234", "1122334455");
+        ClienteRequestDTO invalido = new ClienteRequestDTO("", "", "email-invalido", "1234", "1122334455", null, null, null, true);
 
         ResponseEntity<ErrorResponseDTO> response = restTemplate.postForEntity(
             url("/api/clientes"),
@@ -310,6 +329,307 @@ class ApiIntegrationTests {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().mensaje()).isEqualTo("Hay datos invalidos");
         assertThat(response.getBody().detalles()).isNotEmpty();
+    }
+
+    @Test
+    void elRegistroSinAceptarLosTerminosDevuelve400() {
+        for (Boolean acepta : new Boolean[] {false, null}) {
+            String email = "sin-terminos-" + UUID.randomUUID() + "@mail.com";
+            ResponseEntity<ErrorResponseDTO> response = sinSesion.postForEntity(
+                url("/api/clientes"), clienteRequest("Sin", "Terminos", email, acepta), ErrorResponseDTO.class);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().detalles()).anyMatch(d -> d.startsWith("aceptaTerminos"));
+            assertThat(usuarioRepository.existsByEmailIgnoreCase(email)).isFalse();
+        }
+    }
+
+    @Test
+    void elRegistroGuardaCuandoSeAceptaronLosTerminos() {
+        String email = "con-terminos-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+
+        assertThat(usuarioRepository.findByEmailIgnoreCase(email).orElseThrow().getAceptoTerminosEn()).isNotNull();
+    }
+
+    @Test
+    void elLimiteDeIntentosDeLoginResponde429() {
+        String email = "intentos-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+        for (int i = 0; i < 5; i++) {
+            assertThat(estadoDelLogin(email, "incorrecta1")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        ResponseEntity<ErrorResponseDTO> bloqueado = sinSesion.postForEntity(
+            url("/api/auth/login"), new LoginRequestDTO(email, PASSWORD_PRUEBA), ErrorResponseDTO.class);
+
+        assertThat(bloqueado.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(bloqueado.getBody().mensaje()).isEqualTo("Demasiados intentos. Probá de nuevo en 15 minutos");
+
+        reloj.fijar(LocalDateTime.now(MetricasService.ZONA).plusMinutes(16));
+        assertThat(estadoDelLogin(email, PASSWORD_PRUEBA)).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void elLoginIncorrectoNoDiceSiFallaElEmailOLaContrasena() {
+        String email = "mensaje-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+
+        ErrorResponseDTO claveMal = sinSesion.postForEntity(
+            url("/api/auth/login"), new LoginRequestDTO(email, "incorrecta1"), ErrorResponseDTO.class).getBody();
+        ErrorResponseDTO emailMal = sinSesion.postForEntity(
+            url("/api/auth/login"), new LoginRequestDTO("nadie-" + email, PASSWORD_PRUEBA), ErrorResponseDTO.class).getBody();
+
+        assertThat(claveMal.mensaje()).isEqualTo(emailMal.mensaje()).isEqualTo("El email o la contraseña no son correctos");
+    }
+
+    @Test
+    void recuperarConUnEmailInexistenteRespondeIgualYNoMandaCorreo() {
+        String existente = "recupera-" + UUID.randomUUID() + "@mail.com";
+        String inexistente = "nadie-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(existente);
+
+        ResponseEntity<String> conCuenta = pedirRecuperacion(existente);
+        ResponseEntity<String> sinCuenta = pedirRecuperacion(inexistente);
+
+        assertThat(conCuenta.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED).isEqualTo(sinCuenta.getStatusCode());
+        assertThat(conCuenta.getBody()).isEqualTo(sinCuenta.getBody());
+        verify(emailService).enviar(eq(existente), anyString(), anyString());
+        verify(emailService, never()).enviar(eq(inexistente), anyString(), anyString());
+    }
+
+    @Test
+    void unTokenUsadoOVencidoSeRechaza() {
+        String email = "token-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+
+        String usado = pedirToken(email);
+        assertThat(estadoDelToken(usado)).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(restablecer(usado, "nueva1234").getStatusCode()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<ErrorResponseDTO> otraVez = sinSesion.getForEntity(url("/api/auth/recuperar/" + usado), ErrorResponseDTO.class);
+        assertThat(otraVez.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(otraVez.getBody().mensaje()).isEqualTo("Este enlace venció o ya se usó");
+        assertThat(restablecer(usado, "otra12345").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        String vencido = pedirToken(email);
+        reloj.fijar(LocalDateTime.now(MetricasService.ZONA).plusMinutes(31));
+        assertThat(estadoDelToken(vencido)).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(restablecer(vencido, "otra12345").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(estadoDelLogin(email, "nueva1234")).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void pedirUnTokenNuevoInvalidaElAnterior() {
+        String email = "nuevo-token-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+
+        String anterior = pedirToken(email);
+        String nuevo = pedirToken(email);
+
+        assertThat(nuevo).isNotEqualTo(anterior);
+        assertThat(estadoDelToken(anterior)).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(estadoDelToken(nuevo)).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void restablecerCambiaLaContrasenaYElLoginFuncionaConLaNueva() {
+        String email = "restablecer-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+        String token = pedirToken(email);
+
+        ResponseEntity<String> debil = restablecer(token, "sololetras");
+        ResponseEntity<String> cambio = restablecer(token, "nueva1234");
+
+        assertThat(debil.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(cambio.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(cambio.getBody()).contains(email);
+        assertThat(estadoDelLogin(email, "nueva1234")).isEqualTo(HttpStatus.OK);
+        assertThat(estadoDelLogin(email, PASSWORD_PRUEBA)).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void elLimiteDePedidosDeRecuperacionResponde429() {
+        String email = "muchos-pedidos-" + UUID.randomUUID() + "@mail.com";
+        for (int i = 0; i < 3; i++) {
+            assertThat(pedirRecuperacion(email).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        }
+
+        assertThat(pedirRecuperacion(email).getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    void miCuentaSinSesionResponde401() {
+        assertThat(comoUsuario(null, HttpMethod.GET, "/api/usuarios/me", null, String.class).getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void unUsuarioNoPuedeModificarLosDatosDeOtro() {
+        String emailA = "cuenta-a-" + UUID.randomUUID() + "@mail.com";
+        String emailB = "cuenta-b-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(emailA);
+        crearCliente(emailB);
+        Long idA = usuarioIdDe(emailA);
+        Long idB = usuarioIdDe(emailB);
+
+        ResponseEntity<CuentaResponseDTO> propia = comoUsuario(idA, HttpMethod.PATCH, "/api/usuarios/me",
+            datosPersonales("  Ana   María ", "Nueva"), CuentaResponseDTO.class);
+        ResponseEntity<String> porId = comoUsuario(idA, HttpMethod.PATCH, "/api/usuarios/" + idB,
+            datosPersonales("Intruso", "Intruso"), String.class);
+
+        assertThat(propia.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(propia.getBody().usuarioId()).isEqualTo(idA);
+        assertThat(propia.getBody().nombre()).isEqualTo("Ana María");
+        assertThat(porId.getStatusCode().is2xxSuccessful()).isFalse();
+        assertThat(usuarioRepository.findById(idB).orElseThrow().getNombre()).isEqualTo("Cliente");
+    }
+
+    @Test
+    void elCambioDeEmailNoSeAplicaHastaConfirmarYUnTokenVencidoSeRechaza() {
+        String anterior = "email-viejo-" + UUID.randomUUID() + "@mail.com";
+        String nuevo = "email-nuevo-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(anterior);
+        Long id = usuarioIdDe(anterior);
+
+        ResponseEntity<ErrorResponseDTO> claveMal = comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/email",
+            Map.of("email", nuevo, "contrasena", "incorrecta1"), ErrorResponseDTO.class);
+        ResponseEntity<CuentaResponseDTO> pedido = comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/email",
+            Map.of("email", nuevo, "contrasena", PASSWORD_PRUEBA), CuentaResponseDTO.class);
+
+        assertThat(claveMal.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(pedido.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(pedido.getBody().email()).isEqualTo(anterior);
+        assertThat(pedido.getBody().emailPendiente()).isEqualTo(nuevo);
+        assertThat(estadoDelLogin(nuevo, PASSWORD_PRUEBA)).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        ResponseEntity<CuentaResponseDTO> confirmado = comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/email/confirmar",
+            Map.of("token", tokenDeCambioDeEmail(nuevo)), CuentaResponseDTO.class);
+
+        assertThat(confirmado.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(confirmado.getBody().email()).isEqualTo(nuevo);
+        assertThat(confirmado.getBody().emailPendiente()).isNull();
+        verify(emailService).enviar(eq(anterior), anyString(), anyString());
+        assertThat(estadoDelLogin(nuevo, PASSWORD_PRUEBA)).isEqualTo(HttpStatus.OK);
+
+        String otro = "email-otro-" + UUID.randomUUID() + "@mail.com";
+        comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/email", Map.of("email", otro, "contrasena", PASSWORD_PRUEBA), String.class);
+        String vencido = tokenDeCambioDeEmail(otro);
+        reloj.fijar(LocalDateTime.now(MetricasService.ZONA).plusMinutes(31));
+
+        ResponseEntity<ErrorResponseDTO> tarde = comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/email/confirmar",
+            Map.of("token", vencido), ErrorResponseDTO.class);
+        assertThat(tarde.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(usuarioRepository.findById(id).orElseThrow().getEmail()).isEqualTo(nuevo);
+    }
+
+    @Test
+    void elEmailNuevoNoPuedeSerDeOtraCuenta() {
+        String propio = "propio-" + UUID.randomUUID() + "@mail.com";
+        String ajeno = "ajeno-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(propio);
+        crearCliente(ajeno);
+
+        ResponseEntity<ErrorResponseDTO> respuesta = comoUsuario(usuarioIdDe(propio), HttpMethod.POST, "/api/usuarios/me/email",
+            Map.of("email", ajeno, "contrasena", PASSWORD_PRUEBA), ErrorResponseDTO.class);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        verify(emailService, never()).enviar(eq(ajeno), anyString(), anyString());
+    }
+
+    @Test
+    void cambiarLaContrasenaConLaActualIncorrectaDa400YConLaCorrectaElLoginUsaLaNueva() {
+        String email = "cambio-clave-" + UUID.randomUUID() + "@mail.com";
+        crearCliente(email);
+        Long id = usuarioIdDe(email);
+
+        ResponseEntity<ErrorResponseDTO> incorrecta = comoUsuario(id, HttpMethod.PUT, "/api/usuarios/me/contrasena",
+            Map.of("actual", "incorrecta1", "nueva", "nueva1234"), ErrorResponseDTO.class);
+        ResponseEntity<ErrorResponseDTO> igual = comoUsuario(id, HttpMethod.PUT, "/api/usuarios/me/contrasena",
+            Map.of("actual", PASSWORD_PRUEBA, "nueva", PASSWORD_PRUEBA), ErrorResponseDTO.class);
+        ResponseEntity<CuentaResponseDTO> correcta = comoUsuario(id, HttpMethod.PUT, "/api/usuarios/me/contrasena",
+            Map.of("actual", PASSWORD_PRUEBA, "nueva", "nueva1234"), CuentaResponseDTO.class);
+
+        assertThat(incorrecta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(incorrecta.getBody().detalles()).anyMatch(d -> d.startsWith("actual"));
+        assertThat(igual.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(correcta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(correcta.getBody().contrasenaModificadaEn()).isNotNull();
+        assertThat(estadoDelLogin(email, "nueva1234")).isEqualTo(HttpStatus.OK);
+        assertThat(estadoDelLogin(email, PASSWORD_PRUEBA)).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void lasComunicacionesSeGuardanYElPagoLasActiva() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long id = usuarioIdDe(fx.email());
+        CompraResponseDTO compra = reservar(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL));
+
+        restTemplate.postForEntity(url("/api/compras/" + compra.id() + "/pagos"),
+            new PagoRequestDTO(MetodoPago.TARJETA_CREDITO, "Visa", "4242", true, true), String.class);
+        boolean trasPagar = comoUsuario(id, HttpMethod.GET, "/api/usuarios/me", null, CuentaResponseDTO.class).getBody().recibirNovedades();
+        boolean trasApagar = comoUsuario(id, HttpMethod.PATCH, "/api/usuarios/me/comunicaciones",
+            Map.of("recibirNovedades", false), CuentaResponseDTO.class).getBody().recibirNovedades();
+
+        assertThat(trasPagar).isTrue();
+        assertThat(trasApagar).isFalse();
+    }
+
+    @Test
+    void elExportPideLaContrasenaYNoContieneLaContrasena() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long id = usuarioIdDe(fx.email());
+        CompraResponseDTO compra = reservar(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL));
+        pagar(compra.id());
+        String hash = usuarioRepository.findById(id).orElseThrow().getPassword();
+
+        ResponseEntity<String> sinClave = comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/exportar",
+            Map.of("contrasena", "incorrecta1"), String.class);
+        ResponseEntity<String> export = comoUsuario(id, HttpMethod.POST, "/api/usuarios/me/exportar",
+            Map.of("contrasena", PASSWORD_PRUEBA), String.class);
+
+        assertThat(sinClave.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(export.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(export.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).contains("attachment");
+        assertThat(export.getBody())
+            .contains(fx.email(), "\"numero\":" + compra.id(), "\"ultimos4\":\"4242\"")
+            .doesNotContain(hash, PASSWORD_PRUEBA, "password", "codigoTransaccion");
+    }
+
+    @Test
+    void eliminarLaCuentaAnonimizaConservaLasComprasYCancelaLasReservas() {
+        FixtureMetricas fx = fixtureMetricas();
+        Long id = usuarioIdDe(fx.email());
+        CompraResponseDTO confirmada = reservar(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL));
+        pagar(confirmada.id());
+        CompraResponseDTO pendiente = reservar(fx.clienteId(), fx.funcionGrande(), List.of(TipoEntrada.GENERAL));
+
+        ResponseEntity<String> claveMal = comoUsuario(id, HttpMethod.DELETE, "/api/usuarios/me", Map.of("contrasena", "incorrecta1"), String.class);
+        ResponseEntity<String> eliminada = comoUsuario(id, HttpMethod.DELETE, "/api/usuarios/me", Map.of("contrasena", PASSWORD_PRUEBA), String.class);
+
+        assertThat(claveMal.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(eliminada.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        var usuario = usuarioRepository.findById(id).orElseThrow();
+        assertThat(usuario.isActivo()).isFalse();
+        assertThat(usuario.getNombre()).isEqualTo("Usuario");
+        assertThat(usuario.getEmail()).doesNotContain(fx.email()).endsWith("@cineclick.invalid");
+        assertThat(clienteRepository.findById(fx.clienteId()).orElseThrow().getTelefono()).isNull();
+        assertThat(compraRepository.findById(confirmada.id()).orElseThrow().getEstado()).isEqualTo(EstadoCompra.CONFIRMADA);
+        assertThat(compraRepository.findById(pendiente.id()).orElseThrow().getEstado()).isEqualTo(EstadoCompra.CANCELADA);
+        assertThat(estadoDelLogin(fx.email(), PASSWORD_PRUEBA)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(comoUsuario(id, HttpMethod.GET, "/api/usuarios/me", null, String.class).getStatusCode())
+            .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void laUltimaCuentaAdminNoSePuedeEliminar() {
+        assertThat(usuarioRepository.countByRolAndActivoTrue(com.cineclick.model.RolUsuario.ADMIN)).isEqualTo(1);
+
+        ResponseEntity<ErrorResponseDTO> respuesta = comoUsuario(idAdmin(), HttpMethod.DELETE, "/api/usuarios/me",
+            Map.of("contrasena", "admin123"), ErrorResponseDTO.class);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(respuesta.getBody().mensaje()).isEqualTo("No podés eliminar la última cuenta de administrador");
+        assertThat(usuarioRepository.findById(idAdmin()).orElseThrow().isActivo()).isTrue();
     }
 
     @Test
@@ -326,13 +646,7 @@ class ApiIntegrationTests {
 
     @Test
     void permiteCrearClienteConPost() {
-        ClienteRequestDTO request = new ClienteRequestDTO(
-            "Ana",
-            "Gomez",
-            "ana.gomez@example.com",
-            "1234",
-            "1122334455"
-        );
+        ClienteRequestDTO request = clienteRequest("Ana", "Gomez", "ana.gomez@example.com");
 
         ResponseEntity<ClienteResponseDTO> response = restTemplate.postForEntity(
             url("/api/clientes"),
@@ -350,7 +664,7 @@ class ApiIntegrationTests {
     void permiteRecomprarUnaButacaDespuesDeCancelarLaCompra() {
         ClienteResponseDTO cliente = restTemplate.postForEntity(
             url("/api/clientes"),
-            new ClienteRequestDTO("Juan", "Diaz", "juan.recompra@example.com", "1234", null),
+            clienteRequest("Juan", "Diaz", "juan.recompra@example.com"),
             ClienteResponseDTO.class
         ).getBody();
         assertThat(cliente).isNotNull();
@@ -480,7 +794,7 @@ class ApiIntegrationTests {
 
         ResponseEntity<String> duplicado = restTemplate.postForEntity(
             url("/api/clientes"),
-            new ClienteRequestDTO("Otro", "Admin", "admin@cineclick.com", "1234", null),
+            clienteRequest("Otro", "Admin", "admin@cineclick.com"),
             String.class
         );
         assertThat(duplicado.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -587,10 +901,10 @@ class ApiIntegrationTests {
         crearCliente(email);
 
         String guardada = usuarioRepository.findByEmailIgnoreCase(email).orElseThrow().getPassword();
-        assertThat(guardada).startsWith("$2").doesNotContain("1234");
-        assertThat(restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, "1234"), LoginResponseDTO.class).getStatusCode())
+        assertThat(guardada).startsWith("$2").doesNotContain(PASSWORD_PRUEBA);
+        assertThat(restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, PASSWORD_PRUEBA), LoginResponseDTO.class).getStatusCode())
             .isEqualTo(HttpStatus.OK);
-        assertThat(restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, "12345"), String.class).getStatusCode())
+        assertThat(restTemplate.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, PASSWORD_PRUEBA + "5"), String.class).getStatusCode())
             .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
@@ -625,7 +939,6 @@ class ApiIntegrationTests {
         }
     }
 
-    // Cine nuevo con dos salas (100 y 50 butacas) y una funcion en cada una el proximo sabado a las 18
     private FixtureMetricas fixtureMetricas() {
         String sufijo = UUID.randomUUID().toString().substring(0, 8);
         CineResponseDTO cine = restTemplate.postForEntity(url("/api/cines"),
@@ -645,8 +958,6 @@ class ApiIntegrationTests {
         ClienteResponseDTO cliente = crearCliente(email);
         return new FixtureMetricas(cine.id(), funcionGrande, funcionChica, cliente.id(), sabado, pelicula.id(), grande.id(), email);
     }
-
-    // ---------- Arrepentimiento ----------
 
     @Test
     void arrepentimientoEnPlazoAnulaLasEntradasYLiberaLasButacas() {
@@ -717,8 +1028,6 @@ class ApiIntegrationTests {
         assertThat(correcta.getBody().elegibleArrepentimiento()).isTrue();
     }
 
-    // ---------- Doble funcion ----------
-
     @Test
     void combinablesRespetanElMargenYDescartanMismaPeliculaOtroCineYAgotadas() {
         FixtureMetricas fx = fixtureMetricas();
@@ -748,8 +1057,6 @@ class ApiIntegrationTests {
         assertThat(combinables.antes()).extracting(CombinablesResponseDTO.Combinable::funcionId).doesNotContain(terminaCincoAntes);
         assertThat(combinables.despues()).extracting(CombinablesResponseDTO.Combinable::funcionId).doesNotContain(mismaPelicula, agotada, deOtroCine);
     }
-
-    // ---------- Reglas de promociones ----------
 
     @Test
     void promocionDeLunesNoValeParaUnaFuncionDelSabado() {
@@ -982,8 +1289,6 @@ class ApiIntegrationTests {
         return funcion.id();
     }
 
-    // Compra armada directo con los repositorios (asi se puede fijar la fecha y el estado), con
-    // "cantidad" entradas de $ 1000 en las butacas que siguen a "desde"
     private Long venderEntradas(FixtureMetricas fx, Long funcionId, int desde, int cantidad, EstadoCompra estado, LocalDateTime fecha) {
         return venderEntradas(fx.clienteId(), funcionId, desde, cantidad, estado, fecha);
     }
@@ -1045,14 +1350,77 @@ class ApiIntegrationTests {
         return new HttpEntity<>(headers);
     }
 
+    private <T> ResponseEntity<T> comoUsuario(Long usuarioId, HttpMethod metodo, String path, Object cuerpo, Class<T> tipo) {
+        HttpHeaders headers = new HttpHeaders();
+        if (usuarioId != null) {
+            headers.set("X-Usuario-Id", String.valueOf(usuarioId));
+        }
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return sinSesion.exchange(url(path), metodo, new HttpEntity<>(cuerpo, headers), tipo);
+    }
+
+    private Long usuarioIdDe(String email) {
+        return usuarioRepository.findByEmailIgnoreCase(email).orElseThrow().getId();
+    }
+
+    private Map<String, Object> datosPersonales(String nombre, String apellido) {
+        Long cineId = cineRepository.findByActivoTrue().stream().map(Cine::getId).min(Long::compare).orElseThrow();
+        return Map.of("nombre", nombre, "apellido", apellido, "telefono", "11 4000 1000",
+            "fechaNacimiento", "1990-05-20", "genero", "OTRO", "cinePreferidoId", cineId);
+    }
+
+    private String tokenDeCambioDeEmail(String emailNuevo) {
+        ArgumentCaptor<String> cuerpo = ArgumentCaptor.forClass(String.class);
+        verify(emailService, atLeastOnce()).enviar(eq(emailNuevo), anyString(), cuerpo.capture());
+        Matcher enlace = java.util.regex.Pattern.compile("/cuenta/confirmar-email\\?token=([A-Za-z0-9_-]+)").matcher(cuerpo.getValue());
+        assertThat(enlace.find()).isTrue();
+        return enlace.group(1);
+    }
+
     private ClienteResponseDTO crearCliente(String email) {
         ClienteResponseDTO cliente = restTemplate.postForEntity(
             url("/api/clientes"),
-            new ClienteRequestDTO("Cliente", "Prueba", email, "1234", null),
+            clienteRequest("Cliente", "Prueba", email),
             ClienteResponseDTO.class
         ).getBody();
         assertThat(cliente).isNotNull();
         return cliente;
+    }
+
+    private ClienteRequestDTO clienteRequest(String nombre, String apellido, String email) {
+        return clienteRequest(nombre, apellido, email, true);
+    }
+
+    private ClienteRequestDTO clienteRequest(String nombre, String apellido, String email, Boolean aceptaTerminos) {
+        Long cineId = cineRepository.findByActivoTrue().stream().map(Cine::getId).min(Long::compare).orElseThrow();
+        return new ClienteRequestDTO(nombre, apellido, email, PASSWORD_PRUEBA, "1122334455",
+            LocalDate.of(1990, 5, 20), cineId, GeneroCliente.OTRO, aceptaTerminos);
+    }
+
+    private ResponseEntity<String> pedirRecuperacion(String email) {
+        return sinSesion.postForEntity(url("/api/auth/recuperar"), Map.of("email", email), String.class);
+    }
+
+    private String pedirToken(String email) {
+        assertThat(pedirRecuperacion(email).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        ArgumentCaptor<String> cuerpo = ArgumentCaptor.forClass(String.class);
+        verify(emailService, atLeastOnce()).enviar(eq(email), anyString(), cuerpo.capture());
+        Matcher enlace = java.util.regex.Pattern.compile("/restablecer\\?token=([A-Za-z0-9_-]+)").matcher(cuerpo.getValue());
+        assertThat(enlace.find()).isTrue();
+        return enlace.group(1);
+    }
+
+    private HttpStatus estadoDelToken(String token) {
+        return HttpStatus.valueOf(sinSesion.getForEntity(url("/api/auth/recuperar/" + token), String.class).getStatusCode().value());
+    }
+
+    private ResponseEntity<String> restablecer(String token, String password) {
+        return sinSesion.postForEntity(url("/api/auth/restablecer"), Map.of("token", token, "password", password), String.class);
+    }
+
+    private HttpStatus estadoDelLogin(String email, String password) {
+        return HttpStatus.valueOf(sinSesion.postForEntity(url("/api/auth/login"), new LoginRequestDTO(email, password), String.class)
+            .getStatusCode().value());
     }
 
     private String url(String path) {

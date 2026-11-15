@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SolicitudArrepentimientoRepository extends JpaRepository<SolicitudArrepentimiento, Long> {
+    List<SolicitudArrepentimiento> findByCompraClienteIdOrderByFechaDesc(Long clienteId);
+
 
     Optional<SolicitudArrepentimiento> findByCompraId(Long compraId);
 

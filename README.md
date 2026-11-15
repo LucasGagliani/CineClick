@@ -43,6 +43,8 @@ Todo está en `src/main/resources/application.properties`. Cualquier valor se pu
 | `cineclick.combinables.margen-minutos` / `ventana-horas` | `10` / `3` | Doble función: margen mínimo entre una y otra y ventana de búsqueda |
 | `cineclick.limite.pedidos-por-minuto` | `20` | Límite por IP de los formularios públicos (búsqueda de compra, arrepentimiento, soporte) |
 | `cineclick.ingreso.minutos-antes` / `minutos-despues` | `60` / `30` | Ventana de ingreso para validar entradas |
+| `spring.mail.*` (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`) | Gmail por SMTP | Cuenta que manda los correos de recuperación y el comprobante. Ver `CONFIGURAR_EMAIL.md` |
+| `cineclick.frontend.url` (`CINECLICK_FRONTEND_URL`) | `http://localhost:5173` | Base del enlace `/restablecer?token=...` del correo de recuperación |
 
 ## Datos de demo (seed)
 
@@ -105,13 +107,14 @@ El flujo es `Cliente → Controller → Service → Repository → Base de datos
 
 | Recurso | Endpoints |
 |---|---|
-| Auth | `POST /api/auth/login` |
+| Auth | `POST /api/auth/login` · `POST /api/auth/recuperar` · `GET /api/auth/recuperar/{token}` · `POST /api/auth/restablecer` |
 | Películas | `GET /api/peliculas` · `GET /api/peliculas/{id}` · `GET /api/peliculas/destacadas` · `GET /api/peliculas/proximos-estrenos` · 🔒 `POST /api/peliculas` · 🔒 `PUT`, `DELETE /api/peliculas/{id}` · 🔒 `PATCH /api/peliculas/{id}/estado` |
 | Lista de espera | `POST /api/peliculas/{id}/lista-espera` · `DELETE /api/peliculas/{id}/lista-espera/{clienteId}` · `GET /api/clientes/{id}/lista-espera` |
 | Cines | `GET /api/cines` · `GET /api/cines/{id}` · `GET /api/cines/{id}/salas` · 🔒 `POST /api/cines` · 🔒 `PUT`, `DELETE /api/cines/{id}` · 🔒 `PATCH /api/cines/{id}/estado` · 🔒 `POST /api/cines/{id}/salas` |
 | Salas | `GET /api/salas` · 🔒 `PUT`, `DELETE /api/salas/{id}` · 🔒 `PATCH /api/salas/{id}/estado` |
 | Funciones | `GET /api/funciones` · `GET /api/funciones/{id}` · `GET /api/funciones/{id}/butacas-disponibles` · `GET /api/funciones/{id}/precios` · `GET /api/funciones/{id}/combinables` · 🔒 `POST /api/funciones` · 🔒 `PUT`, `DELETE /api/funciones/{id}` · 🔒 `PATCH /api/funciones/{id}/cancelar` |
 | Clientes | `POST /api/clientes` (registro) · `GET /api/clientes/{id}/compras` · 🔒 `GET /api/clientes` · 🔒 `GET`, `PUT`, `DELETE /api/clientes/{id}` |
+| Mi cuenta | `GET`, `PATCH`, `DELETE /api/usuarios/me` · `POST /api/usuarios/me/email` · `POST /api/usuarios/me/email/reenviar` · `DELETE /api/usuarios/me/email` · `POST /api/usuarios/me/email/confirmar` · `PUT /api/usuarios/me/contrasena` · `PATCH /api/usuarios/me/comunicaciones` · `POST /api/usuarios/me/exportar` |
 | Compras | `POST /api/compras` · `GET /api/compras/{id}` · `PATCH /api/compras/{id}/cancelar` · `POST /api/compras/{id}/promocion` · `GET /api/compras/buscar?email=&codigo=` |
 | Pagos | `POST /api/compras/{id}/pagos` · `GET /api/pagos/{id}` |
 | Promociones | `GET /api/promociones/vigentes` · 🔒 `GET`, `POST /api/promociones` · 🔒 `PUT`, `DELETE /api/promociones/{id}` · 🔒 `PATCH /api/promociones/{id}/estado` |
@@ -141,6 +144,28 @@ En `requests/cineclick-demo.http` hay ejemplos de todos los endpoints con las cu
 - Los endpoints de administración llevan la anotación `@SoloAdmin` (en el método o en el controller). `InterceptorAdmin` la verifica en un solo lugar: lee `X-Usuario-Id` y responde `403` si no es un administrador activo.
 - Las contraseñas se guardan con **BCrypt** (`spring-security-crypto` 6.3.10, sin Spring Security completo) y el login las compara con `matches()`. Las contraseñas en texto plano de bases anteriores se migran solas al arrancar.
 - Los formularios públicos tienen un límite de pedidos por IP (`429` si se supera).
+- **Login:** si el email o la contraseña no coinciden, responde siempre `401` con el mismo mensaje ("El email o la contraseña no son correctos"), sin decir cuál de los dos falló. Después de 5 intentos fallidos con el mismo email desde la misma IP en 15 minutos responde `429` ("Demasiados intentos. Probá de nuevo en N minutos"). Un login correcto borra el contador.
+- **Registro:** `POST /api/clientes` exige `"aceptaTerminos": true` (si no, `400`) y guarda en el usuario la fecha y hora de aceptación (`aceptoTerminosEn`). Si el email ya tiene cuenta responde `409` ("Ya existe una cuenta con ese email"). La contraseña tiene que tener al menos 8 caracteres, una letra y un número.
+
+## Recuperación de contraseña
+
+1. **`POST /api/auth/recuperar`** `{ "email" }`: responde siempre `202` con el mismo cuerpo, exista o no la cuenta, así no sirve para averiguar qué emails están registrados. Si la cuenta existe, genera un token y manda por correo (`EmailService`, SMTP) el enlace `{cineclick.frontend.url}/restablecer?token=...`. Límite: 3 pedidos por email e IP cada 15 minutos (`429`).
+2. **`GET /api/auth/recuperar/{token}`**: `204` si el enlace sirve; `404` ("Este enlace venció o ya se usó") si venció, ya se usó o no existe. El front lo consulta al abrir el enlace, antes de mostrar el formulario.
+3. **`POST /api/auth/restablecer`** `{ "token", "password" }`: valida el token y los mismos requisitos de contraseña que el registro, guarda la nueva con BCrypt, marca el token como usado y devuelve `{ mensaje, email }` (el front precarga el email en el login).
+
+El token son 32 bytes de `SecureRandom` en base64url y solo viaja en el enlace: en la tabla `tokens_recuperacion` (entidad `TokenRecuperacion`) se guarda su hash SHA-256, con `expiraEn` (30 minutos) y `usadoEn`. Pedir un enlace nuevo borra los anteriores del usuario, así que solo sirve el último.
+
+## Mi cuenta
+
+Todos los endpoints de `/api/usuarios/me` operan sobre el usuario de la sesión (`X-Usuario-Id`), nunca sobre un id de la URL o del cuerpo. Sin sesión (o con un usuario desactivado) responden `401`. Las operaciones sensibles (cambiar el email o la contraseña, descargar los datos y eliminar la cuenta) piden la contraseña actual, la comparan con BCrypt y comparten el límite de intentos del login: una contraseña incorrecta es un `400` en el campo (`actual` o `contrasena`) y cuenta como intento fallido; al quinto en 15 minutos, `429`.
+
+- **`GET /api/usuarios/me`**: nombre, apellido, email, rol, "cliente desde", los datos de cliente (teléfono, fecha de nacimiento, género, complejo preferido), `contrasenaModificadaEn`, `recibirNovedades` y, si hay un cambio de email sin confirmar, `emailPendiente` y su vencimiento.
+- **`PATCH /api/usuarios/me`** `{ nombre, apellido, telefono, fechaNacimiento, genero, cinePreferidoId }`: con las mismas validaciones que el registro. Un administrador no tiene datos de cliente: solo se usan nombre y apellido.
+- **Cambio de email:** `POST /me/email` `{ email, contrasena }` no lo cambia: manda al email nuevo un enlace `{cineclick.frontend.url}/cuenta/confirmar-email?token=...` que vence en 30 minutos (mismo mecanismo de token hasheado que la recuperación, tabla `tokens_cambio_email`). El email nuevo no puede tener cuenta (`409`). `POST /me/email/reenviar` manda otro enlace y `DELETE /me/email` cancela el cambio (3 envíos cada 15 minutos). `POST /me/email/confirmar` `{ token }` lo aplica (con la sesión del mismo usuario; si no, `404`) y avisa al email anterior.
+- **`PUT /api/usuarios/me/contrasena`** `{ actual, nueva }`: la nueva cumple los requisitos del registro y no puede ser igual a la actual. Guarda `contrasenaModificadaEn`.
+- **`PATCH /api/usuarios/me/comunicaciones`** `{ recibirNovedades }`: la misma preferencia que activa la casilla "Quiero recibir novedades" del pago (`"recibirNovedades": true` en `POST /api/compras/{id}/pagos`; sin marcar no la apaga).
+- **`POST /api/usuarios/me/exportar`** `{ contrasena }`: un JSON (`Content-Disposition: attachment`) con la cuenta, las compras (función, entradas, montos, estados y del pago solo marca y últimos 4 dígitos) y las solicitudes de arrepentimiento y soporte. Nunca incluye la contraseña ni el código de transacción. Es `POST` y no `GET` porque pide la contraseña: como `X-Usuario-Id` se puede falsificar, sin ella cualquiera podría bajar los datos de otro.
+- **`DELETE /api/usuarios/me`** `{ contrasena }`: anonimiza la cuenta (nombre "Usuario eliminado", email `eliminado-{id}@cineclick.invalid`, contraseña reemplazada por una al azar, datos de cliente en `null`) y la desactiva. Las compras se conservan, así no cambian las métricas ni el registro de ventas; las reservas pendientes de pago se cancelan y liberan sus butacas. También se anonimizan el nombre y el email de sus solicitudes de arrepentimiento y soporte, se borra su lista de espera y sus enlaces pendientes. La última cuenta de administrador activa no se puede eliminar (`400`).
 
 ## Reglas de promociones
 
@@ -189,12 +214,12 @@ Todos los errores devuelven el mismo formato JSON:
 | Código | Cuándo |
 |---|---|
 | 400 | Datos inválidos (el detalle de cada campo va en `detalles`), JSON mal formado o una regla de negocio que no se cumple |
-| 401 | Login incorrecto |
+| 401 | Login incorrecto (el mismo mensaje si falla el email o la contraseña) |
 | 403 | Endpoint de administración sin `X-Usuario-Id` de un administrador |
 | 404 | No existe el recurso o el endpoint |
 | 405 | Método HTTP no soportado |
 | 409 | Butaca ya vendida, email ya registrado o registro con datos asociados |
-| 429 | Demasiados pedidos desde la misma IP en un formulario público |
+| 429 | Demasiados pedidos desde la misma IP en un formulario público, 5 logins fallidos o 3 pedidos de recuperación en 15 minutos |
 | 500 | Error inesperado del servidor |
 
 ## Reglas de negocio principales
@@ -210,10 +235,12 @@ Todos los errores devuelven el mismo formato JSON:
 ./mvnw test
 ```
 
-Son 39 tests de integración que levantan la app con una base en memoria y sus propios datos (`DatosDePrueba`, perfil `test`, sin el seed de demo). Cubren el CRUD, las validaciones y los códigos de error, el flujo de compra, las reglas de promociones (incluido el tope con pagos simultáneos), el arrepentimiento, la doble función, las métricas, el acceso de administrador en cada grupo de endpoints, BCrypt, las compras del admin, los horarios redondos y la validación de entradas (cada resultado y cada motivo, con un reloj de prueba, y dos validaciones simultáneas).
+Son 57 tests de integración que levantan la app con una base en memoria y sus propios datos (`DatosDePrueba`, perfil `test`, sin el seed de demo). Cubren el CRUD, las validaciones y los códigos de error, el flujo de compra, las reglas de promociones (incluido el tope con pagos simultáneos), el arrepentimiento, la doble función, las métricas, el acceso de administrador en cada grupo de endpoints, BCrypt, las compras del admin, los horarios redondos, la validación de entradas (cada resultado y cada motivo, con un reloj de prueba, y dos validaciones simultáneas), el límite de intentos de login, la aceptación de términos en el registro la recuperación de contraseña (misma respuesta con un email inexistente, token usado, vencido o reemplazado por uno nuevo, y login con la contraseña nueva) y Mi cuenta (que un usuario no pueda tocar los datos de otro, el cambio de email que se aplica recién al confirmar, el cambio de contraseña, el export sin la contraseña, la eliminación con sus compras y reservas, y la última cuenta admin). `EmailService` está reemplazado por un mock en los tests, así que no se manda ningún correo real.
 
 ## Limitaciones conocidas
 
-- **Autenticación sin tokens.** El backend identifica al usuario por el encabezado `X-Usuario-Id`, que cualquiera puede falsificar. El control de administrador es básico, no seguridad real; un sistema en producción usaría sesiones o tokens firmados.
-- **Sin envío de mails.** Los códigos de arrepentimiento y soporte y las entradas se muestran en pantalla.
+- **Autenticación sin tokens.** El backend identifica al usuario por el encabezado `X-Usuario-Id`, que cualquiera puede falsificar. El control de administrador es básico, no seguridad real; un sistema en producción usaría sesiones o tokens firmados. En Mi cuenta, por eso, todo lo sensible pide la contraseña; ver los datos (`GET /me`), editar los personales y la preferencia de novedades solo usan el encabezado.
+- **Correos solo para recuperación y comprobante.** Se mandan por SMTP (ver `CONFIGURAR_EMAIL.md`) el enlace de recuperación de contraseña y el comprobante en PDF de cada pago aprobado. Los códigos de arrepentimiento y soporte se siguen mostrando solo en pantalla. Si el SMTP no está configurado o falla, el error queda en el log y la API responde igual.
+- **Los límites de intentos viven en memoria.** El contador de logins fallidos y de pedidos de recuperación se pierde al reiniciar el backend y no se comparte entre varias instancias.
+- **El tiempo de respuesta de `POST /api/auth/recuperar` puede delatar si el email existe.** El cuerpo y el código son los mismos, pero cuando la cuenta existe el correo se manda dentro del mismo pedido y tarda más. Se resolvería mandándolo en segundo plano.
 - **Pagos simulados.** No hay pasarela de pagos.

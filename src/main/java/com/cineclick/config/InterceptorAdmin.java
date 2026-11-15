@@ -28,7 +28,7 @@ public class InterceptorAdmin implements HandlerInterceptor {
         return metodo.hasMethodAnnotation(SoloAdmin.class) || metodo.getBeanType().isAnnotationPresent(SoloAdmin.class);
     }
 
-    private static Long usuarioDe(HttpServletRequest request) {
+    public static Long usuarioDe(HttpServletRequest request) {
         String valor = request.getHeader(CABECERA_USUARIO);
         if (valor == null || !valor.trim().matches("\\d{1,18}")) {
             return null;

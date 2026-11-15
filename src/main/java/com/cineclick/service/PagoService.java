@@ -42,6 +42,9 @@ public class PagoService {
             return DtoMapper.toPagoResponse(existente.get());
         }
         compraService.verificarReservaActiva(compra);
+        if (Boolean.TRUE.equals(dto.recibirNovedades())) {
+            compra.getCliente().getUsuario().setRecibirNovedades(true);
+        }
 
         boolean sinCargo = compra.getTotal().signum() == 0;
         if (!sinCargo) {

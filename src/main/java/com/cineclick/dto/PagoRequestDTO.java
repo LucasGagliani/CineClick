@@ -10,6 +10,10 @@ public record PagoRequestDTO(
     MetodoPago metodoPago,
     @Size(max = 20) String marca,
     @Pattern(regexp = "[0-9]{4}", message = "tienen que ser los ultimos 4 digitos de la tarjeta") String ultimos4,
-    @NotNull @AssertTrue(message = "hay que aceptar los terminos y condiciones") Boolean aceptaTerminos
+    @NotNull @AssertTrue(message = "hay que aceptar los terminos y condiciones") Boolean aceptaTerminos,
+    Boolean recibirNovedades
 ) {
+    public PagoRequestDTO(MetodoPago metodoPago, String marca, String ultimos4, Boolean aceptaTerminos) {
+        this(metodoPago, marca, ultimos4, aceptaTerminos, null);
+    }
 }
