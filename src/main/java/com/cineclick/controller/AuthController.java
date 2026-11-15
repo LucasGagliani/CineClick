@@ -3,6 +3,7 @@ package com.cineclick.controller;
 import com.cineclick.dto.LoginRequestDTO;
 import com.cineclick.dto.LoginResponseDTO;
 import com.cineclick.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -20,7 +21,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/login")
-    public LoginResponseDTO login(@Valid @RequestBody LoginRequestDTO dto) {
-        return authService.login(dto);
+    public LoginResponseDTO login(@Valid @RequestBody LoginRequestDTO dto, HttpServletRequest request) {
+        return authService.login(dto, request);
     }
 }
