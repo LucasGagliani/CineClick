@@ -43,8 +43,6 @@ public interface FuncionRepository extends JpaRepository<Funcion, Long> {
         """)
     List<Funcion> buscarParaMetricas(@Param("desde") LocalDateTime desde, @Param("hasta") LocalDateTime hasta, @Param("cineId") Long cineId);
 
-    // Con join fetch viene todo en una sola consulta (sin N+1).
-    // Los filtros que llegan en null se ignoran.
     @Query("""
         select f from Funcion f
         join fetch f.pelicula p

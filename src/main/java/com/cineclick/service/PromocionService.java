@@ -30,26 +30,9 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
-/**
- * Reglas de las promociones. Toda la validacion pasa por validarPromocionParaCompra (al aplicar el
- * codigo) y por confirmarUso (al pagar, dentro de la transaccion del pago).
- *
- * Semantica de cada regla:
- * - Vigencia: se compara con el momento de la compra (al aplicar el codigo y otra vez al pagar).
- * - Dias de la semana: se comparan con el dia de la FUNCION, no con el de la compra. Sin dias = todos.
- * - Usos por usuario: compras CONFIRMADAS del cliente con esa promocion; las canceladas y las
- *   arrepentidas no cuentan.
- * - Primera compra: el cliente no tiene ninguna compra CONFIRMADA (las arrepentidas no cuentan).
- * - Tope total: usosActuales cuenta las compras pagadas con la promocion. Se incrementa al confirmar
- *   el pago (no al aplicar el codigo: las reservas que vencen no consumen cupos) y baja si se aprueba
- *   un arrepentimiento.
- * - Entradas con descuento y monto maximo: ver Promocion.descuentosPorEntrada (las N entradas de mayor
- *   precio; el total del descuento se recorta al monto maximo).
- */
 @Service
 @RequiredArgsConstructor
 public class PromocionService {
-
     private static final Locale ES = Locale.forLanguageTag("es-AR");
     private static final DateTimeFormatter DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
@@ -107,7 +90,6 @@ public class PromocionService {
         promocionRepository.delete(promocion);
     }
 
-    // Al aplicar el codigo a una reserva: todas las reglas, en orden (1 a 7), cada una con su mensaje
     public Promocion validarPromocionParaCompra(String codigo, Cliente cliente, Funcion funcion, LocalDateTime ahora) {
         Promocion promocion = promocionRepository.findByCodigoIgnoreCase(codigo.trim())
             .orElseThrow(() -> new PromocionRechazadaException("Ese código no existe"));
@@ -119,10 +101,6 @@ public class PromocionService {
         return promocion;
     }
 
-    // Al confirmar el pago, dentro de su transaccion: primero las reglas que no dependen del usuario,
-    // despues el incremento atomico (toma el lock de la fila y serializa las confirmaciones concurrentes;
-    // si no afecta filas, se agoto) y recien despues las reglas del usuario. Si alguna de estas falla, se
-    // deshace el incremento.
     public void confirmarUso(Compra compra, LocalDateTime ahora) {
         Promocion promocion = compra.getPromocion();
         validarCondiciones(promocion, compra.getFuncion(), ahora);
@@ -137,7 +115,6 @@ public class PromocionService {
         }
     }
 
-    // Un arrepentimiento aprobado devuelve el uso
     public void devolverUso(Promocion promocion) {
         promocionRepository.decrementarUso(promocion.getId());
     }
@@ -179,7 +156,6 @@ public class PromocionService {
         return Optional.empty();
     }
 
-    // Con sesion de cliente, cada promocion dice si ese cliente la puede usar y, si no, por que
     private PromocionResponseDTO conUso(Promocion promocion, Optional<Cliente> cliente) {
         if (cliente.isEmpty()) {
             return DtoMapper.toPromocionResponse(promocion);

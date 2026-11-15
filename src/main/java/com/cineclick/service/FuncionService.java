@@ -46,7 +46,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class FuncionService {
-
     private final FuncionRepository funcionRepository;
     private final PeliculaRepository peliculaRepository;
     private final SalaRepository salaRepository;
@@ -74,9 +73,6 @@ public class FuncionService {
         return toResponses(funcionRepository.buscarConFiltros(peliculaId, cineId, !incluirInactivos, formato, desde, hasta));
     }
 
-    // Funciones del mismo cine y dia, de otras peliculas y con butacas libres, que terminan antes del inicio
-    // de la elegida o empiezan despues de su fin, con al menos el margen y dentro de la ventana. El fin es
-    // estimado: inicio + duracion + publicidad (el horario publicado incluye la tanda previa).
     @Transactional(readOnly = true)
     public CombinablesResponseDTO combinables(Long id) {
         Funcion elegida = buscarEntidad(id);
